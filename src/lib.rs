@@ -15,6 +15,8 @@
     cfg_attr(doc, doc =::document_features::document_features!())
 )]
 
+pub mod counter;
 pub mod id;
+pub mod resource;
 pub mod rng;
 pub mod zone;
