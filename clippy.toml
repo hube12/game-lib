@@ -1,0 +1,2 @@
+# Duplicates pulled in transitively by criterion/serde and not fixable from here.
+allowed-duplicate-crates = ["syn"]

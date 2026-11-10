@@ -1,0 +1,2 @@
+# Overrides for `cross` (https://github.com/cross-rs/cross). Empty on purpose: default images are used.
+# `scripts/cross_test.sh` builds aarch64-unknown-linux-gnu.
