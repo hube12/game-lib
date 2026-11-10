@@ -15,6 +15,7 @@
     cfg_attr(doc, doc =::document_features::document_features!())
 )]
 
+pub mod cost;
 pub mod counter;
 pub mod id;
 pub mod resource;
