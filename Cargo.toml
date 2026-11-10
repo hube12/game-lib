@@ -1,0 +1,38 @@
+[package]
+name = "gamelib"
+version = "0.0.0"
+authors = ["Neil <neilhube12@gmail.com>"]
+edition = "2024"
+description = "Game lib"
+readme = "README.md"
+repository = "https://github.com/hube12/game-lib"
+keywords = ["game"]
+categories = ["game-development"]
+license = "MIT"
+
+[workspace]
+members = ["."]
+# Fuzz crates are standalone (they need their own toolchain flags and lockfiles).
+exclude = ["afl-fuzz", "fuzz", "games/res-arcana-gui/src-tauri"]
+
+[lib]
+name = "gamelib"
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+serde_json = "1.0.154"
+
+[dependencies]
+document-features = { version = "0.2.12", optional = true } # Required to build docs
+rand_chacha = { version = "0.10.0", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = 'fat'
+strip = "symbols"
+
+[profile.dev]
+opt-level = 0
+debug = true
