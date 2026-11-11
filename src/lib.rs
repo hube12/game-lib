@@ -17,7 +17,9 @@
 
 pub mod cost;
 pub mod counter;
+pub mod event;
 pub mod id;
+pub mod modifier;
 pub mod resource;
 pub mod rng;
 pub mod zone;
