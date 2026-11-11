@@ -28,4 +28,5 @@ pub mod pay;
 pub mod resource;
 pub mod rng;
 pub mod state;
+pub mod view;
 pub mod zone;
