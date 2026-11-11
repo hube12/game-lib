@@ -19,6 +19,7 @@ pub mod card;
 pub mod cost;
 pub mod counter;
 pub mod effect;
+pub mod engine;
 pub mod event;
 pub mod flow;
 pub mod id;
