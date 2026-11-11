@@ -24,6 +24,7 @@ pub mod flow;
 pub mod id;
 pub mod market;
 pub mod modifier;
+pub mod pay;
 pub mod resource;
 pub mod rng;
 pub mod state;
