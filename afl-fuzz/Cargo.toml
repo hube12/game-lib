@@ -1,0 +1,15 @@
+[package]
+name = "afl-fuzz"
+version = "0.1.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2024"
+
+[dependencies]
+afl = "0.18"
+
+[dependencies.gamelib]
+path = ".."
+
+# Keep this crate out of the root workspace (it needs its own lockfile and `cargo afl` build flags).
+[workspace]
