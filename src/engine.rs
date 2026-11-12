@@ -1611,3 +1611,6 @@ fn permutations(n: usize) -> Vec<Vec<usize>> {
     go(&mut (0..n).collect(), &mut Vec::new(), &mut out);
     out
 }
+
+#[cfg(test)]
+mod tests;
