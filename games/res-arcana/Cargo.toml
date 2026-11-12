@@ -1,0 +1,10 @@
+[package]
+name = "gamelib-res-arcana"
+version = "0.0.0"
+authors = ["Neil <neilhube12@gmail.com>"]
+edition = "2024"
+description = "Res Arcana card data and its loader"
+publish = false
+
+[dependencies]
+gamelib = { path = "../.." }
