@@ -1,0 +1,266 @@
+# Res Arcana base game, transcribed from the German-edition photos (all_cards.jpg, components.jpg) and checked
+# against [RA]_Rulebook_EN_FC_LR.pdf. 10 mages, 10 monuments, 5 places of power, 8 magic items, 40 artifacts.
+#
+# SYMBOLS (rulebook correspondence)
+#   E Elan (red)   L Life (green)   C Calm (blue)   D Death (black)   G Gold (yellow)
+#   *        any essence (the grey pentagon). "3*" = any mix of 3. "*-G" / "*-GD" = restricted: no Gold / no Gold or Death
+#   N        a number chosen by the player. "N*=" = N identical essences (all the same kind); "NG" = N Gold
+#   T        the turning icon (turn this component sideways)
+#   +        "all of these" (the rulebook's "+")          /   choose one of these (the rulebook's "/")
+#   >        the triangle between a power's cost and its effect
+#   @        "on the component": put the essences on this card instead of into your pool (turn @ into a Collect later)
+#   an amount on the cost side is paid to the supply; on the effect side it is taken from the supply.
+#
+# CARD HEADER   <kind> "<printed German name>" [en="<English name>"]
+#               [cost=<amounts joined by +>] [vp=<n>|<n>+<m>/<essence>|<m>/<essence>] [types=dragon,creature]
+#   vp=2+1/L means 2 points plus 1 point per Life on the card (places of power); vp=1/D means 1 per Death on it.
+#
+# BODY (indented)
+#   collect <options>                 Collect ability (the black collect icon). Options joined by / ; "D+E" is both
+#   collect-left <E> > <options>      Vault: if that essence is left on the card, gain these
+#   collect-grow <n>                  Windup Man: if essences are left on the card, add n of each kind present
+#   collect-curse <amount>            Cursed Forge: in Collect, either pay this (the curse) or turn the card
+#   onclaim <options>                 effect when the monument is claimed
+#   discount <artifact|dragon> <amount>   placement discount (cumulative; a cost never drops below 0)
+#   power <cost> > <effect>           a power (using one is an action)
+#   react <trigger> <cost> > <effect> a React power (out of turn). Triggers: lifeloss, dragon-power, victory-check
+#
+# COST PARTS (joined by +)    T | <amount> | A/B (pay one of) | turn:dragon | turn:creature | destroy:self |
+#                             destroy:other | destroy:own | discard:<n> | take:<amount> (take it off this card)
+# EFFECT PARTS (joined by +)  <amount>[/<amount>...][@] | draw:<n> | discard:<n> | peek:<n>:<deck>[|<deck>]
+#                             (look at the top n, reorder, put back; decks artifact|monument) | straighten:any|creature|self |
+#                             ignore | rivals:lose:<amount> [~pay:<amount> | ~discard | ~destroy] (rivals' immediate
+#                             React to ignore it) | rivals:gain:<amount> | gain-per-rival:<gain>:<counted> |
+#                             gain-cost:<discarded|destroyed>:<bonus>:<amount> (essences equal to that card's placement
+#                             cost plus bonus) | place:<artifact|dragon>:<hand|discard>:<free|discount=<amount>> |
+#                             put-paid:<self|any> (put the essence you paid on a component) | victory-check |
+#                             vp:<n>:temp
+#
+# All readings were re-checked against components.jpg (the sharpest photo of every base card) and the rulebook; no
+# "# CHECK:" flags remain. A "# CHECK:" comment would mark a reading that is still doubtful.
+# Also re-checked and confirmed on the photos: tiny exclusion markers (Himmlisches Pferd Gold+Death, Artificer, Crypt,
+# Hängende Gärten, Prism; the dragon discounts show none), the Golden Statue's turn icon, the rival reactions of the
+# six dragons (Bone: pay Death, Earth: Gold, Water: Elan, Fire: Calm, Wind: discard a card, Sea Serpent: destroy one of
+# their own artifacts), Corrupt Altar (2 Life), Guard Dog, Athanor, and the place of power costs and points.
+# Back sides of the Places of Power are not photographed anywhere and are not transcribed.
+
+# ------------------------------------------------------------------------------------------------ MAGES
+mage "Heiler" en="Healer"
+  collect C/L
+  react lifeloss T > ignore
+mage "Verwandlerin" en="Transmuter"
+  power T+2* > 3*-G
+mage "Gelehrter" en="Scholar"
+  # EN-CHECK: "Scholar" is a translation of the German name, not read from an English card.
+  power T+1* > draw:1
+mage "Duellant" en="Duelist"
+  collect E
+  power T+D > G@
+mage "Druidin" en="Druid"
+  collect L
+  power T > straighten:creature
+mage "Feuerwerker" en="Artificer"
+  discount artifact 1*-G
+mage "Seherin" en="Seer"
+  collect C
+  power T > peek:3:artifact|monument
+mage "Nekromantin" en="Necromancer"
+  collect D
+  power T+2L > 3D@
+mage "Hexe" en="Witch"
+  collect L/D
+  power T+2* > straighten:any
+mage "Alchemist"
+  power T+4* > 2G
+  power T > 1*-G
+
+# ------------------------------------------------------------------------------------------------ MONUMENTS
+# All monuments cost 4 Gold (rulebook p.6).
+monument "Orakel" en="Oracle" cost=4G vp=2
+  power T > peek:3:artifact|monument
+monument "Obelisk" cost=4G vp=1
+  onclaim 6*-G
+monument "Salomos Schatzkammer" en="Solomon's Treasury" cost=4G vp=1
+  # EN-CHECK: "Solomon's Treasury" is a translation of the German name, not read from an English card.
+  power T > G
+monument "Mausoleum" cost=4G vp=2
+  power 1* > D@
+monument "Hängende Gärten" en="Hanging Gardens" cost=4G vp=1
+  collect 3*-G
+monument "Bibliothek" en="Library" cost=4G vp=1
+  power T > draw:1
+monument "Große Pyramide" en="Great Pyramid" cost=4G vp=3
+monument "Goldene Statue" en="Golden Statue" cost=4G vp=1
+  # The points are temporary: only for this victory check (rulebook p.9).
+  react victory-check T+3G > vp:3:temp
+monument "Tempel" en="Temple" cost=4G vp=2
+  collect L
+  react lifeloss T > ignore
+monument "Koloss" en="Colossus" cost=4G vp=2
+  power T+1* > G@
+
+# ------------------------------------------------------------------------------------------------ PLACES OF POWER
+# Double-sided; only the side printed on the photographed cards is transcribed (the rulebook's "first game" side).
+place "Verfluchte Schmiede" en="Cursed Forge" cost=6E+3D vp=1+1/G
+  collect-curse 1D
+  # Checked on components.jpg: the cost shows a red 2 (Elan) and a Gold, each with the red "paid" cross, then Gold
+  # "auf" (on) the card.
+  power 2E+G > G@
+place "Heiliger Hain" en="Sacred Grove" cost=8L+4C vp=2+1/L
+  power T+C > 5L
+  power T+turn:creature > L@
+place "Drachenhort" en="Dragon's Lair" cost=3E+3L+3C+3D vp=1/G
+  discount dragon 3*
+  power T > 2G
+  power T+turn:dragon > 2G@
+place "Korallenschloss" en="Coral Castle" cost=5E+5L+5C vp=3
+  power T > victory-check
+  react lifeloss T > ignore
+place "Katakomben der Toten" en="Catacombs of the Dead" cost=9D vp=1/D
+  collect D
+  power 5D > D@
+  power T > D@
+
+# ------------------------------------------------------------------------------------------------ MAGIC ITEMS
+# Each player holds one; swapped when passing. "Tod / Leben" and "Ruhe / Elan" are one card each, with two halves.
+item "Forschung" en="Research"
+  power T+1* > draw:1
+item "Umwandlung" en="Transmutation"
+  power T+3* > 3*-G
+item "Tod / Leben" en="Death / Life"
+  collect D/L
+item "Wahrsagen" en="Divination"
+  # Checked: the card reads "3 Artefakte ziehen, 3 abwerten" (draw 3 artifacts, discard 3; the rulebook
+  # glossary says the same).
+  power T > draw:3+discard:3
+item "Ruhe / Elan" en="Calm / Elan"
+  collect C/E
+item "Alchemie" en="Alchemy"
+  power T+4* > 2G
+item "Schutz" en="Protection"
+  react lifeloss T > ignore
+item "Wiederbelebung" en="Reanimate"
+  power T+1* > straighten:any
+
+# ------------------------------------------------------------------------------------------------ ARTIFACTS
+artifact "Knochendrache" en="Bone Dragon" cost=4D+L vp=1 types=dragon
+  power T > rivals:lose:2L~pay:1D
+artifact "Seeschlange" en="Sea Serpent" cost=6C+3L vp=1 types=dragon,creature
+  power T > rivals:lose:2L~destroy
+artifact "Juwelenstatuette" en="Jeweled Statuette" cost=2D+G vp=1
+  # EN-CHECK: "Jeweled Statuette" is a translation of the German name, not read from an English card.
+  power T > 3D+rivals:gain:1D
+  power destroy:self > 2G+E
+artifact "Verdorbener Altar" en="Corrupt Altar" cost=3*+2D
+  collect L+D
+  power 2L > 3E@
+  # The second power may destroy the Altar itself (rulebook p.10).
+  power T+destroy:own > gain-cost:destroyed:2:*-G
+artifact "Meerjungfrau" en="Mermaid" cost=2L+2C types=creature
+  collect C
+  power T+C/L/G > put-paid:any
+artifact "Hand des Ruhmes" en="Hand of Glory" cost=L+D
+  power T > 2D+rivals:gain:1D
+artifact "Drachenzahn" en="Dragon Tooth" cost=E+D
+  power 2E > 3E@
+  power T+3E > place:dragon:hand:free
+artifact "Elementarquelle" en="Elemental Spring" cost=2E+L+C
+  # EN-CHECK: "Elemental Spring" is a translation of the German name, not read from an English card.
+  collect C+L+E
+  react lifeloss 1C > ignore
+artifact "Zwergen-Spitzhacke" en="Dwarven Pickaxe" cost=E
+  power T+E > G
+artifact "Erddrache" en="Earth Dragon" cost=4E+3L vp=1 types=dragon
+  power T > rivals:lose:2L~pay:1G
+artifact "Elfenbogen" en="Elven Bow" cost=2E+L
+  power T > rivals:lose:1L
+  power T > draw:1
+artifact "Drachenzaum" en="Dragon Bridle" cost=E+L+C+D vp=1
+  discount dragon 3*
+  react dragon-power T > ignore
+artifact "Flammenpeitsche" en="Fiery Whip" cost=2E+2D
+  power T > 3E+rivals:gain:1E
+  # The second power cannot be used on the Whip itself (rulebook p.10).
+  power T+destroy:other > gain-cost:destroyed:2:*-G
+artifact "Athanor" cost=G+E
+  power T+E > 2E@
+  # Turn in 6 Elan from this card and N identical essences from your pool; take N Gold (rulebook p.10).
+  power T+take:6E+N*= > NG
+artifact "Füllhorn" en="Cornucopia" cost=2G
+  # EN-CHECK: "Cornucopia" is a translation of the German name, not read from an English card.
+  power T > 3*-G
+  power T > G
+artifact "Wachhund" en="Guard Dog" cost=E types=creature
+  # The first power can be used while the Guard Dog is turned (rulebook p.10).
+  power E > straighten:self
+  react lifeloss T > ignore
+artifact "Magische Scherbe" en="Magical Shard" cost=0
+  power T > 1*-G
+artifact "Prisma" en="Prism" cost=0
+  power T+1* > 2*-G
+  # Checked: both pentagons carry the "=" (identical) marker plus the small Gold marker, so N identical essences become
+  # N identical essences of any kind, never Gold. The rulebook glossary says "different essence", but a later
+  # clarification says any identical essences convert to the same number of any other identical essence, so the paid
+  # kind may be taken again.
+  power T+N*= > N*=-G
+artifact "Opferdolch" en="Sacrificial Dagger" cost=D+G
+  power T+L > 3D@
+  power destroy:self+discard:1 > gain-cost:discarded:0:*-G
+artifact "Wasserdrache" en="Water Dragon" cost=6C vp=1 types=dragon
+  power T > rivals:lose:2L~pay:1E
+artifact "Feuerdrache" en="Fire Dragon" cost=6E vp=1 types=dragon
+  power T > rivals:lose:2L~pay:1C
+artifact "Baum des Lebens" en="Tree of Life" cost=2*+L
+  power T > 3L+rivals:gain:1L
+  react lifeloss 1L > ignore
+artifact "Falke" en="Hawk" cost=L+C types=creature
+  collect C
+  power T > peek:3:artifact|monument
+  power T+2C > draw:1
+artifact "Flammenkelch" en="Chalice of Fire" cost=G+E
+  collect 2E
+  power T+E > straighten:any
+artifact "Kelch des Lebens" en="Chalice of Life" cost=G+L+C
+  collect C+L
+  power 2C > 2C@+L@
+  react lifeloss T > ignore
+artifact "Himmlisches Pferd" en="Celestial Horse" cost=2C+E types=creature
+  collect 2*-GD
+artifact "Stein der Weisen" en="Philosopher's Stone" cost=2E+2L+2C+2D vp=1
+  # Checked: turn icon, a "2" pentagon and an "=" pentagon (both paid, red crosses) give N Gold (rulebook glossary).
+  power T+2*+N*= > NG
+artifact "Baumhirte" en="Treant" cost=3L+2E types=creature
+  collect 2L
+  power T > gain-per-rival:E:D
+artifact "Nachtigall" en="Nightingale" cost=L+C vp=1 types=creature
+artifact "Jungbrunnen" en="Fountain of Youth" cost=C+D
+  collect L
+  power 2D > 2C@+L@
+artifact "Drachenei" en="Dragon Egg" cost=G vp=1
+  power destroy:self > place:dragon:hand:discount=4*
+artifact "Tresor" en="Vault" cost=G+1*
+  collect-left G > 2*-G
+  power T > G@
+artifact "Flammengrube" en="Flame Pit" cost=2E
+  # EN-CHECK: "Flame Pit" is a translation of the German name, not read from an English card.
+  collect E
+  power T+L > E+D
+artifact "Aufziehmann" en="Windup Man" cost=E+L+C+G
+  collect-grow 2
+  power T+1* > put-paid:self
+artifact "Krypta" en="Crypt" cost=3*+2D
+  power T > 2D
+  power T+D > place:artifact:discard:discount=2*-G
+artifact "Hypnotisches Becken" en="Hypnotic Basin" cost=2C+E+D
+  collect 2C
+  power T > gain-per-rival:C:E
+artifact "Verfluchter Schädel" en="Cursed Skull" cost=2D
+  power T+L > 3*-GL@
+artifact "Winddrache" en="Wind Dragon" cost=4C+4* vp=1 types=dragon
+  power T > rivals:lose:2L~discard
+artifact "Tanzendes Schwert" en="Dancing Sword" cost=G+E
+  collect D+E
+  react lifeloss E > ignore+D@
+artifact "Midas Ring" en="Ring of Midas" cost=L+G vp=1
+  power 2L > G@
+  power T > G@
