@@ -15,9 +15,11 @@
     clippy::missing_panics_doc
 )]
 
+pub mod compile;
 pub mod parse;
 pub mod spec;
 
+pub use compile::{CompileError, Compiled, compile, compile_all};
 pub use parse::{ParseError, parse};
 pub use spec::{CardKind, CardSpec, Essence};
 
