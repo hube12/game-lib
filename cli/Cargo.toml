@@ -1,0 +1,12 @@
+[package]
+name = "gamelib-cli"
+version = "0.0.0"
+authors = ["Neil <neilhube12@gmail.com>"]
+edition = "2024"
+description = "Headless runner for gamelib games"
+publish = false
+
+[dependencies]
+gamelib = { path = ".." }
+gamelib-res-arcana = { path = "../games/res-arcana" }
+gamelib-toy = { path = "../games/toy" }
