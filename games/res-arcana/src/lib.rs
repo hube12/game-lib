@@ -17,6 +17,7 @@
 
 pub mod compile;
 pub mod parse;
+pub mod rules;
 pub mod spec;
 
 pub use compile::{CompileError, Compiled, compile, compile_all};
