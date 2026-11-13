@@ -15,6 +15,7 @@
     clippy::missing_panics_doc
 )]
 
+pub mod bot;
 pub mod compile;
 pub mod parse;
 pub mod rules;
