@@ -18,6 +18,7 @@
 pub mod bot;
 pub mod compile;
 pub mod parse;
+pub mod planner;
 pub mod rules;
 pub mod spec;
 
