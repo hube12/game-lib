@@ -1,0 +1,25 @@
+[package]
+name = "gamelib-res-arcana-gui"
+version = "0.0.0"
+authors = ["Neil <neilhube12@gmail.com>"]
+edition = "2024"
+description = "Res Arcana for gamelib-gui: card text, colors, the page, and a dev server"
+publish = false
+
+[dependencies]
+gamelib = { path = "../.." }
+gamelib-gui = { path = "../../gui" }
+gamelib-res-arcana = { path = "../res-arcana" }
+
+[dev-dependencies]
+serde_json = "1.0.154"
+
+[[bin]]
+name = "res-arcana-dev"
+path = "src/bin/dev.rs"
+required-features = ["serve"]
+
+[features]
+default = []
+## Build the dev server (an HTTP server, no webview needed).
+serve = ["gamelib-gui/serve"]

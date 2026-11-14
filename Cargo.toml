@@ -11,7 +11,7 @@ categories = ["game-development"]
 license = "MIT"
 
 [workspace]
-members = [".", "cli", "gui", "games/toy", "games/res-arcana"]
+members = [".", "cli", "gui", "games/toy", "games/res-arcana", "games/res-arcana-gui"]
 # Fuzz crates are standalone (they need their own toolchain flags and lockfiles).
 exclude = ["afl-fuzz", "fuzz", "games/res-arcana-gui/src-tauri"]
 
