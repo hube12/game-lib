@@ -14,11 +14,13 @@
     clippy::missing_panics_doc
 )]
 
+pub mod api;
 pub mod board;
 pub mod describe;
 pub mod description;
 pub mod record;
 pub mod session;
 
+pub use api::{Backend, Request, Response};
 pub use description::{CardInfo, GameDescription, NamedId, Names, ResourceInfo, ScoreLine};
 pub use session::{GameUi, NewGame, Session, Snapshot};
