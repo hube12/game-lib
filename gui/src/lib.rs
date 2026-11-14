@@ -20,6 +20,7 @@ pub mod describe;
 pub mod description;
 pub mod record;
 pub mod session;
+pub mod web;
 
 pub use api::{Backend, Request, Response};
 pub use description::{CardInfo, GameDescription, NamedId, Names, ResourceInfo, ScoreLine};
