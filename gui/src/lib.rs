@@ -17,5 +17,6 @@
 pub mod board;
 pub mod describe;
 pub mod description;
+pub mod record;
 
 pub use description::{CardInfo, GameDescription, NamedId, Names, ResourceInfo, ScoreLine};
