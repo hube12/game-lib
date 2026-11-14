@@ -19,6 +19,8 @@ pub mod board;
 pub mod describe;
 pub mod description;
 pub mod record;
+#[cfg(feature = "serve")]
+pub mod serve;
 pub mod session;
 pub mod web;
 
