@@ -49,7 +49,7 @@ use gamelib_res_arcana::{
         take_from_card,
         type_tag,
     },
-    planner::PlannerBot,
+    planner::{Difficulty, Params, PlannerBot},
     rules::{
         ASIDE,
         CANDIDATES,
@@ -86,18 +86,25 @@ pub const PAGES: &[Asset] = &[
 /// Res Arcana as the GUI plays it.
 #[derive(Clone, Debug)]
 pub struct ResArcanaUi {
-    rules: ResArcanaRules,
+    rules:      ResArcanaRules,
+    difficulty: Difficulty,
 }
 
 /// The option that turns on the draft variant (see
 /// [`ResArcanaRules::with_draft`]).
 pub const DRAFT_OPTION: &str = "draft";
 
+/// The prefix of the option that sets how well the bots play, `difficulty=1`
+/// (a beginner) to `difficulty=5` (the default, full strength): see
+/// [`Difficulty`].
+pub const DIFFICULTY_OPTION: &str = "difficulty=";
+
 impl ResArcanaUi {
     /// The base game.
     pub fn new() -> Self {
         Self {
-            rules: ResArcanaRules::new(),
+            rules:      ResArcanaRules::new(),
+            difficulty: Difficulty::MAX,
         }
     }
 }
@@ -388,6 +395,10 @@ impl GameUi for ResArcanaUi {
 
     fn with_options(mut self, options: &[String]) -> Self {
         self.rules = self.rules.with_draft(options.iter().any(|o| o == DRAFT_OPTION));
+        self.difficulty = options
+            .iter()
+            .find_map(|o| o.strip_prefix(DIFFICULTY_OPTION)?.parse().ok())
+            .map_or(Difficulty::MAX, Difficulty::new);
         self
     }
 
@@ -431,8 +442,12 @@ impl GameUi for ResArcanaUi {
         description
     }
 
-    fn bot(&self, _player: PlayerId, _seed: u64) -> Box<dyn Bot + Send> {
-        Box::new(PlannerBot::new())
+    fn bot(&self, _player: PlayerId, seed: u64) -> Box<dyn Bot + Send> {
+        Box::new(PlannerBot::with_difficulty(
+            Params::default(),
+            self.difficulty,
+            seed,
+        ))
     }
 
     fn option_label(

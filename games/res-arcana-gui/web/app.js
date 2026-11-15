@@ -13,7 +13,7 @@ let snapshot = null;
 let viewer = 0;
 let error = null;
 
-const defaults = { players: 2, seed: 1, german: false, draft: false };
+const defaults = { players: 2, seed: 1, german: false, draft: false, difficulty: 5 };
 function loadSettings() {
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem('res-arcana') ?? '{}') };
@@ -32,7 +32,7 @@ let settings = loadSettings();
 
 async function newGame() {
   try {
-    snapshot = await call({ type: 'new_game', players: settings.players, seed: settings.seed, humans: [0], options: settings.draft ? ['draft'] : [] });
+    snapshot = await call({ type: 'new_game', players: settings.players, seed: settings.seed, humans: [0], options: [...(settings.draft ? ['draft'] : []), `difficulty=${settings.difficulty}`] });
     viewer = 0;
     error = null;
     saveSettings(settings);
@@ -122,6 +122,12 @@ function controls() {
     { id: 'players', onchange: (e) => { settings.players = Number(e.target.value); } },
     [2, 3, 4].map((n) => h('option', { value: n, selected: n === settings.players }, `${n} players`)),
   );
+  const levels = ['Novice', 'Easy', 'Medium', 'Hard', 'Expert'];
+  const difficulty = h(
+    'select',
+    { id: 'difficulty', title: 'How well the bots play (applies to the next new game)', onchange: (e) => { settings.difficulty = Number(e.target.value); saveSettings(settings); } },
+    levels.map((name, i) => h('option', { value: i + 1, selected: i + 1 === settings.difficulty }, `Bots: ${name}`)),
+  );
   const seed = h('input', { id: 'seed', type: 'number', value: settings.seed, onchange: (e) => { settings.seed = Number(e.target.value) || 1; } });
   const seats = snapshot
     ? h(
@@ -134,6 +140,7 @@ function controls() {
     'div',
     { class: 'controls' },
     players,
+    difficulty,
     h('label', null, 'Seed', seed),
     h(
       'label',

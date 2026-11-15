@@ -32,6 +32,7 @@ use gamelib::{
     effect::{Ability, Condition, Effect, Target, Trigger},
     engine::{Action, Engine},
     id::{DefId, EntityId, PlayerId, ResourceId},
+    rng::Rng,
     state::GameState,
     view::PlayerView,
     zone::Owner,
@@ -162,11 +163,87 @@ impl Params {
     }
 }
 
-/// Simulated moves the bot allows itself per choice.
-const BUDGET: usize = 4_000;
-/// How many of its own decisions in a row the bot tries out in full after a
-/// move; further ones are answered by what looks best at once.
-const FULL_DEPTH: usize = 2;
+/// How well the planner plays, on a dial from 1 (a beginner) to 5 (the full
+/// strength, and the default).
+///
+/// Three things get weaker as the dial goes down: how many moves it simulates
+/// per choice, how many of its own follow-up decisions it tries out in full,
+/// and how often it plays the second or third best move it found instead of
+/// the best one (never when the best move wins the game).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Difficulty(u8);
+
+impl Difficulty {
+    /// The weakest setting.
+    pub const MIN: Self = Self(1);
+    /// The strongest setting (what the planner always did before the dial).
+    pub const MAX: Self = Self(5);
+
+    /// A setting from 1 to 5; other numbers are brought into that range.
+    pub const fn new(level: u8) -> Self {
+        Self(if level < 1 {
+            1
+        } else if level > 5 {
+            5
+        } else {
+            level
+        })
+    }
+
+    /// The number on the dial.
+    pub const fn level(self) -> u8 {
+        self.0
+    }
+
+    /// A name for the setting.
+    pub const fn name(self) -> &'static str {
+        match self.0 {
+            1 => "Novice",
+            2 => "Easy",
+            3 => "Medium",
+            4 => "Hard",
+            _ => "Expert",
+        }
+    }
+
+    /// Simulated moves allowed per choice.
+    const fn budget(self) -> usize {
+        match self.0 {
+            1 => 60,
+            2 => 300,
+            3 => 1_000,
+            4 => 2_500,
+            _ => 4_000,
+        }
+    }
+
+    /// How many of its own decisions in a row the bot tries out in full after
+    /// a move; further ones are answered by what looks best at once.
+    const fn full_depth(self) -> usize {
+        match self.0 {
+            1 | 2 => 0,
+            3 | 4 => 1,
+            _ => 2,
+        }
+    }
+
+    /// Chance, in percent, of not playing the best move.
+    const fn slip(self) -> u64 {
+        match self.0 {
+            1 => 50,
+            2 => 30,
+            3 => 15,
+            4 => 5,
+            _ => 0,
+        }
+    }
+}
+
+impl Default for Difficulty {
+    fn default() -> Self {
+        Self::MAX
+    }
+}
 /// Worth of winning; nothing else comes close.
 const WIN: f64 = 10_000.0;
 /// Most actions per round, a guard against a loop of powers.
@@ -963,11 +1040,14 @@ impl Eval {
 /// The bot that looks one move ahead with [`Eval`].
 #[derive(Debug)]
 pub struct PlannerBot {
-    rules:   ResArcanaRules,
-    eval:    Eval,
-    note:    Option<String>,
-    round:   u32,
-    actions: u32,
+    rules:      ResArcanaRules,
+    eval:       Eval,
+    note:       Option<String>,
+    round:      u32,
+    actions:    u32,
+    difficulty: Difficulty,
+    /// Decides when a weaker bot slips; seeded, so games still replay.
+    rng:        Rng,
 }
 
 impl PlannerBot {
@@ -978,6 +1058,11 @@ impl PlannerBot {
 
     /// A bot with its own numbers (for tuning).
     pub fn with_params(params: Params) -> Self {
+        Self::with_difficulty(params, Difficulty::MAX, 0)
+    }
+
+    /// A bot of a given strength. `seed` decides when a weaker bot slips.
+    pub fn with_difficulty(params: Params, difficulty: Difficulty, seed: u64) -> Self {
         let rules = ResArcanaRules::new();
         let eval = Eval::new(&rules, params);
         Self {
@@ -986,7 +1071,23 @@ impl PlannerBot {
             note: None,
             round: 0,
             actions: 0,
+            difficulty,
+            rng: Rng::from_seed(seed),
         }
+    }
+
+    /// A weaker bot sometimes plays the second or third best move it found.
+    /// A move that wins is always played.
+    fn slip(&mut self, scored: &[(f64, usize)], choice: usize, winning: bool) -> usize {
+        let chance = self.difficulty.slip();
+        if chance == 0 || winning || scored.len() < 2 {
+            return choice;
+        }
+        if self.rng.below(100) as u64 >= chance {
+            return choice;
+        }
+        let at = 1 + self.rng.below(scored.len().min(3) - 1);
+        scored[at].1
     }
 
     /// The name of a card for the notes.
@@ -1063,7 +1164,7 @@ impl PlannerBot {
                 continue;
             }
             *budget -= options;
-            if who == me && depth < FULL_DEPTH {
+            if who == me && depth < self.difficulty.full_depth() {
                 // Try every option to the end and keep the best.
                 let mut best = f64::NEG_INFINITY;
                 for i in 0..options {
@@ -1235,7 +1336,7 @@ impl Bot for PlannerBot {
             .filter(|q| **q != me)
             .map(|q| self.eval.player(&base, *q, &frame, false))
             .sum();
-        let mut budget = BUDGET;
+        let mut budget = self.difficulty.budget();
         let mut scored: Vec<(f64, usize)> = Vec::with_capacity(legal.len());
         for (i, action) in legal.iter().enumerate() {
             if budget == 0 {
@@ -1299,6 +1400,8 @@ impl Bot for PlannerBot {
                 (None, None) => 0,
             }
         };
+        let best = choice;
+        let choice = self.slip(&scored, choice, wins(best_move.map_or(0.0, |m| m.0)));
         if !deciding {
             self.actions += 1;
         }
@@ -1310,6 +1413,9 @@ impl Bot for PlannerBot {
             frame.vp_worth,
             self.describe(state, &legal[choice]),
         );
+        if choice != best {
+            note.push_str(" (a slip: not the best move)");
+        }
         for (gain, i) in scored.iter().take(6) {
             let _ = write!(note, "; {gain:+.2} {}", self.describe(state, &legal[*i]));
         }

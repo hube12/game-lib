@@ -10,7 +10,7 @@ use gamelib_cli::{
 };
 use gamelib_res_arcana::{
     bot::HeuristicBot,
-    planner::{Params, PlannerBot},
+    planner::{Difficulty, Params, PlannerBot},
     rules::ResArcanaRules,
 };
 use gamelib_toy::ToyRules;
@@ -33,6 +33,7 @@ enum BotKind {
     Planner {
         params: Params,
         tuned:  bool,
+        level:  Difficulty,
     },
 }
 
@@ -45,7 +46,8 @@ impl BotKind {
         }
     }
 
-    /// `planner`, or `planner:name=value:name=value` to change its numbers.
+    /// `planner`, or `planner:name=value:name=value` to change its numbers;
+    /// `level=1..5` is the difficulty dial (5, the default, is full strength).
     fn planner(spec: &str) -> Option<Self> {
         let mut parts = spec.split(':');
         if parts.next() != Some("planner") {
@@ -53,20 +55,40 @@ impl BotKind {
         }
         let mut params = Params::default();
         let mut tuned = false;
+        let mut level = Difficulty::MAX;
         for part in parts {
             let (name, value) = part.split_once('=')?;
-            if !params.set(name, value.parse().ok()?) {
+            if name == "level" {
+                let n: u8 = value.parse().ok()?;
+                if !(1..=5).contains(&n) {
+                    return None;
+                }
+                level = Difficulty::new(n);
+            } else if params.set(name, value.parse().ok()?) {
+                tuned = true;
+            } else {
                 return None;
             }
-            tuned = true;
         }
-        Some(Self::Planner { params, tuned })
+        Some(Self::Planner {
+            params,
+            tuned,
+            level,
+        })
     }
 
     const fn name(self) -> &'static str {
         match self {
             Self::Random => "random",
             Self::Heuristic => "heuristic",
+            Self::Planner { level, .. } if level.level() < Difficulty::MAX.level() => {
+                match level.level() {
+                    1 => "planner (novice)",
+                    2 => "planner (easy)",
+                    3 => "planner (medium)",
+                    _ => "planner (hard)",
+                }
+            },
             Self::Planner { tuned: false, .. } => "planner",
             Self::Planner { tuned: true, .. } => "planner (tuned)",
         }
@@ -89,8 +111,8 @@ struct Options {
 }
 
 const USAGE: &str = "usage: gamelib-cli [--game toy|res-arcana] [--bot \
-                     random|heuristic|planner[:name=value..]] [--bots B1,B2,..] [--games N] \
-                     [--seed S] [--players P] [--max-actions M] [--draft]";
+                     random|heuristic|planner[:name=value..|:level=1..5]] [--bots B1,B2,..] \
+                     [--games N] [--seed S] [--players P] [--max-actions M] [--draft]";
 
 fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     let mut options = Options {
@@ -207,7 +229,11 @@ fn play_with<R: GameRules + Clone>(
                     seed.wrapping_add(i).wrapping_mul(31).wrapping_add(7),
                 )),
                 BotKind::Heuristic => Box::new(HeuristicBot::with_seed(seed)),
-                BotKind::Planner { params, .. } => Box::new(PlannerBot::with_params(*params)),
+                BotKind::Planner { params, level, .. } => Box::new(PlannerBot::with_difficulty(
+                    *params,
+                    *level,
+                    seed.wrapping_add(i).wrapping_mul(31).wrapping_add(7),
+                )),
             }
         })
         .collect();
@@ -356,6 +382,20 @@ mod tests {
         };
         let outcome = play(1, &options, &seating(&options, 0)).unwrap();
         assert!(!outcome.winners.is_empty());
+    }
+
+    #[test]
+    fn the_planner_takes_a_difficulty_level() {
+        let level = |spec: &str| match BotKind::parse(spec).unwrap() {
+            BotKind::Planner { level, tuned, .. } => (level.level(), tuned),
+            other => panic!("not a planner: {other:?}"),
+        };
+        assert_eq!(level("planner"), (5, false));
+        assert_eq!(level("planner:level=2"), (2, false));
+        assert_eq!(level("planner:level=3:gold=2"), (3, true));
+        assert!(BotKind::parse("planner:level=0").is_err());
+        assert!(BotKind::parse("planner:level=6").is_err());
+        assert!(BotKind::parse("planner:level=x").is_err());
     }
 
     #[test]

@@ -308,6 +308,15 @@ table) and `Effect::Shuffle`; the game owns only the composition (`draft()` in `
 `STOCK`. `tests/draft.rs` checks the passing directions, that everybody ends with 8 different artifacts and 3 in hand,
 and that a drafted game replays identically.
 
+### Bot difficulty
+
+The planner bot has a dial from 1 (Novice) to 5 (Expert, full strength and the default; `Difficulty` in `planner.rs`). A lower
+setting simulates fewer moves per choice, tries fewer of its own follow-up decisions in full, and sometimes plays the
+second or third best move it found (never when the best move wins the game). Measured as 40 games against the Expert
+planner (alternating seats): Novice 0 wins, Easy 4, Medium 8, Hard 19. Set it with `planner:level=N` in the CLI (for example
+`--bots planner:level=2,planner`), with the "Bots" selector on the page, or with the `difficulty=N` entry of
+`NewGame.options`. Values outside 1 to 5 are brought into range.
+
 ### How cards become engine data
 
 The core engine never sees `CardSpec`. The **compile step** in the game crate (`games/res-arcana/src/compile.rs`)
@@ -387,6 +396,7 @@ Play the toy game with random bots; every game is replayed afterwards and the re
 cargo run -p gamelib-cli --release -- --games 100 --seed 1 --players 2
 cargo run -p gamelib-cli --release -- --game res-arcana --bot heuristic --games 20 --players 3
 # options: --games N  --seed S  --players P (1..=8)  --max-actions M  --draft (Res Arcana draft variant)
+# planner difficulty: --bots planner:level=2,planner  (1 = novice .. 5 = full strength)
 ```
 
 Replay verification in your own code is the `Engine::replay` snippet above: replay `engine.log()` from the same seed and

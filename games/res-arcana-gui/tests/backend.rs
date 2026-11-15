@@ -582,3 +582,32 @@ fn the_draft_option_deals_a_pack_to_pick_from_and_hides_the_rivals_packs() {
     let (_, plain) = start(3, 2);
     assert!(plain.board.zones.iter().all(|z| z.kind != DRAFT.0));
 }
+
+#[test]
+fn the_difficulty_option_is_accepted_and_the_bots_still_play() {
+    for option in [
+        "difficulty=1",
+        "difficulty=3",
+        "difficulty=9",
+        "difficulty=x",
+    ] {
+        let mut b = backend();
+        let mut s = snapshot(b.handle(Request::NewGame(gamelib_gui::NewGame {
+            players: 3,
+            seed:    Some(6),
+            humans:  Some(vec![0]),
+            options: vec![option.to_owned()],
+        })));
+        for _ in 0..60 {
+            if s.winners.is_some() {
+                break;
+            }
+            s = snapshot(b.handle(Request::Act {
+                viewer:   0,
+                revision: s.revision,
+                action:   pick(&s),
+            }));
+        }
+        assert!(s.revision > 0, "{option}: the game moved on");
+    }
+}
