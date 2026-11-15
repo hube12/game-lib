@@ -1,0 +1,19 @@
+[package]
+name = "res-arcana-gui-app"
+version = "0.0.0"
+authors = ["Neil <neilhube12@gmail.com>"]
+edition = "2024"
+description = "Res Arcana desktop app (Tauri shell around gamelib-gui)"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+gamelib-gui = { path = "../../../gui" }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+gamelib-gui = { path = "../../../gui" }
+gamelib-res-arcana-gui = { path = ".." }
+
+# Standalone: the webview needs system libraries the rest of the workspace does not (see README, "Desktop app").
+[workspace]
