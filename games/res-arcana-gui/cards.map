@@ -1,0 +1,84 @@
+# Res Arcana card -> photo rectangle map (consumed by a script that cuts a rough image per card).
+# Columns (tab separated): id, name, source, x, y, w, h
+#   id     = 0-based position of the card header line (mage|artifact|monument|place|item) in games/res-arcana/data/cards.ra
+#   name   = printed German name, exactly as in cards.ra
+#   source = photo file name, both live in game-rules/res-arcana/ (not in the repo, copyrighted art)
+#   x y w h = pixel rectangle (top-left corner, width, height) of one whole card face in the source photo's own pixels
+# Sources: all_cards.jpg (3958x2677, German edition, hand-placed grid of all cards, perspective tilt; the 60 base mages,
+#   monuments and artifacts are here, expansion cards are skipped), components.jpg (2911x2572; the 5 places of power
+#   and the 8 magic items, which all_cards.jpg does not show).
+# Card sizes differ slightly per row because the photo is in perspective, so w and h are per row; rectangles are rough
+# (about 5-10 px) and the neighbouring card may graze an edge.
+0	Heiler	all_cards.jpg	146	57	215	292
+1	Verwandlerin	all_cards.jpg	385	55	215	292
+2	Gelehrter	all_cards.jpg	605	55	215	292
+3	Duellant	all_cards.jpg	825	55	215	292
+4	Druidin	all_cards.jpg	1278	50	215	292
+5	Feuerwerker	all_cards.jpg	1510	47	215	292
+6	Seherin	all_cards.jpg	1738	52	215	292
+7	Nekromantin	all_cards.jpg	1965	52	215	292
+8	Hexe	all_cards.jpg	2197	50	215	292
+9	Alchemist	all_cards.jpg	125	372	215	292
+10	Orakel	all_cards.jpg	1735	363	215	297
+11	Obelisk	all_cards.jpg	1968	355	215	297
+12	Salomos Schatzkammer	all_cards.jpg	590	675	218	302
+13	Mausoleum	all_cards.jpg	1035	677	218	302
+14	Hängende Gärten	all_cards.jpg	1735	670	218	302
+15	Bibliothek	all_cards.jpg	2215	677	218	302
+16	Große Pyramide	all_cards.jpg	2683	682	218	302
+17	Goldene Statue	all_cards.jpg	2918	685	218	302
+18	Tempel	all_cards.jpg	3160	672	218	302
+19	Koloss	all_cards.jpg	3640	673	218	302
+20	Verfluchte Schmiede	components.jpg	672	858	228	322
+21	Heiliger Hain	components.jpg	905	855	228	322
+22	Drachenhort	components.jpg	1140	852	228	322
+23	Korallenschloss	components.jpg	1380	850	228	322
+24	Katakomben der Toten	components.jpg	1613	847	228	322
+25	Forschung	components.jpg	72	830	142	198
+26	Umwandlung	components.jpg	215	830	142	198
+27	Tod / Leben	components.jpg	360	830	142	198
+28	Wahrsagen	components.jpg	503	830	142	198
+29	Ruhe / Elan	components.jpg	72	1032	142	198
+30	Alchemie	components.jpg	215	1032	142	198
+31	Schutz	components.jpg	360	1032	142	198
+32	Wiederbelebung	components.jpg	503	1032	142	198
+33	Knochendrache	all_cards.jpg	2930	1648	226	322
+34	Seeschlange	all_cards.jpg	55	1635	226	322
+35	Juwelenstatuette	all_cards.jpg	2443	1635	226	322
+36	Verdorbener Altar	all_cards.jpg	1728	1620	226	322
+37	Meerjungfrau	all_cards.jpg	268	2293	228	332
+38	Hand des Ruhmes	all_cards.jpg	2703	1973	228	322
+39	Drachenzahn	all_cards.jpg	2453	2303	228	332
+40	Elementarquelle	all_cards.jpg	35	1950	228	322
+41	Zwergen-Spitzhacke	all_cards.jpg	1495	1618	226	322
+42	Erddrache	all_cards.jpg	2928	1315	220	312
+43	Elfenbogen	all_cards.jpg	2687	1648	226	322
+44	Drachenzaum	all_cards.jpg	2202	1967	228	322
+45	Flammenpeitsche	all_cards.jpg	1020	1622	226	322
+46	Athanor	all_cards.jpg	1472	2285	228	332
+47	Füllhorn	all_cards.jpg	2200	1645	226	322
+48	Wachhund	all_cards.jpg	1230	2287	228	332
+49	Magische Scherbe	all_cards.jpg	1962	1965	228	322
+50	Prisma	all_cards.jpg	1255	1945	228	322
+51	Opferdolch	all_cards.jpg	285	1950	228	322
+52	Wasserdrache	all_cards.jpg	2915	995	220	310
+53	Feuerdrache	all_cards.jpg	543	1630	226	322
+54	Baum des Lebens	all_cards.jpg	778	1627	226	322
+55	Falke	all_cards.jpg	1010	1950	228	322
+56	Flammenkelch	all_cards.jpg	1485	1945	228	322
+57	Kelch des Lebens	all_cards.jpg	1715	1947	228	322
+58	Himmlisches Pferd	all_cards.jpg	1958	2297	228	332
+59	Stein der Weisen	all_cards.jpg	992	2290	228	332
+60	Baumhirte	all_cards.jpg	2453	1973	228	322
+61	Nachtigall	all_cards.jpg	1960	1640	226	322
+62	Jungbrunnen	all_cards.jpg	2945	1973	228	322
+63	Drachenei	all_cards.jpg	752	2285	228	332
+64	Tresor	all_cards.jpg	770	1950	228	322
+65	Flammengrube	all_cards.jpg	520	1957	228	322
+66	Aufziehmann	all_cards.jpg	2200	2305	228	332
+67	Krypta	all_cards.jpg	510	2290	228	332
+68	Hypnotisches Becken	all_cards.jpg	2707	2305	228	332
+69	Verfluchter Schädel	all_cards.jpg	1258	1618	226	322
+70	Winddrache	all_cards.jpg	30	2295	228	332
+71	Tanzendes Schwert	all_cards.jpg	300	1635	226	322
+72	Midas Ring	all_cards.jpg	1715	2285	228	332
