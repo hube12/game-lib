@@ -84,11 +84,13 @@ struct Options {
     seed:        u64,
     players:     u8,
     max_actions: usize,
+    /// Res Arcana's draft variant.
+    draft:       bool,
 }
 
 const USAGE: &str = "usage: gamelib-cli [--game toy|res-arcana] [--bot \
                      random|heuristic|planner[:name=value..]] [--bots B1,B2,..] [--games N] \
-                     [--seed S] [--players P] [--max-actions M]";
+                     [--seed S] [--players P] [--max-actions M] [--draft]";
 
 fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     let mut options = Options {
@@ -99,6 +101,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
         seed:        0,
         players:     2,
         max_actions: 20_000,
+        draft:       false,
     };
     let mut args = args.into_iter();
     while let Some(flag) = args.next() {
@@ -128,6 +131,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
                 options.max_actions =
                     value("--max-actions")?.parse().map_err(|_| bad("--max-actions"))?;
             },
+            "--draft" => options.draft = true,
             "-h" | "--help" => return Err(USAGE.into()),
             other => return Err(format!("unknown option {other}\n{USAGE}")),
         }
@@ -146,6 +150,9 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     if options.game == Game::ResArcana && !(2..=4).contains(&options.players) {
         return Err("res-arcana is played by 2 to 4 players".into());
     }
+    if options.draft && options.game != Game::ResArcana {
+        return Err("--draft is a Res Arcana variant (use --game res-arcana)".into());
+    }
     Ok(options)
 }
 
@@ -153,7 +160,12 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
 fn play(seed: u64, options: &Options, seats: &[BotKind]) -> Result<Outcome, String> {
     match options.game {
         Game::Toy => play_with(&ToyRules, seed, options, seats),
-        Game::ResArcana => play_with(&ResArcanaRules::new(), seed, options, seats),
+        Game::ResArcana => play_with(
+            &ResArcanaRules::new().with_draft(options.draft),
+            seed,
+            options,
+            seats,
+        ),
     }
 }
 
@@ -293,6 +305,7 @@ mod tests {
                 seed:        0,
                 players:     2,
                 max_actions: 20_000,
+                draft:       false,
             }
         );
         let o = parse(args(&[
@@ -316,6 +329,7 @@ mod tests {
                 seed:        9,
                 players:     3,
                 max_actions: 100,
+                draft:       false,
             }
         );
     }
@@ -338,9 +352,18 @@ mod tests {
             seed:        1,
             players:     2,
             max_actions: 20_000,
+            draft:       false,
         };
         let outcome = play(1, &options, &seating(&options, 0)).unwrap();
         assert!(!outcome.winners.is_empty());
+    }
+
+    #[test]
+    fn the_draft_variant_belongs_to_res_arcana() {
+        let o = parse(args(&["--game", "res-arcana", "--draft"])).unwrap();
+        assert!(o.draft);
+        assert!(!parse(args(&["--game", "res-arcana"])).unwrap().draft);
+        assert!(parse(args(&["--draft"])).unwrap_err().contains("Res Arcana"));
     }
 
     #[test]
@@ -365,6 +388,7 @@ mod tests {
             seed:        1,
             players:     2,
             max_actions: 50_000,
+            draft:       false,
         };
         let outcome = play(1, &options, &seating(&options, 0)).unwrap();
         assert!(!outcome.winners.is_empty());

@@ -296,6 +296,18 @@ monument "Goldene Statue" en="Golden Statue" cost=4G vp=1
 `types`, `abilities`); `parse(text)` does the same for any string. If you add a keyword, add it to `parse.rs` and add a
 test in `tests/cards.rs` that quotes the rulebook.
 
+### Draft variant (optional)
+
+`ResArcanaRules::new().with_draft(true)` (CLI: `--draft`; the page: the "Draft" checkbox, sent as the `draft` entry of
+`NewGame.options`) replaces the random starting decks. After the mages are dealt, everybody is dealt 4 artifacts, keeps 1
+and passes the rest to the left (clockwise), and so on until none is left to pass; then 4 more, passed to the right. The 8
+kept artifacts are shuffled into the deck and the first 3 are drawn; mages and magic items are chosen afterwards as in the
+normal game. Offering the deck to a rival to cut is left out (shuffling is already random). It is built from three
+generic engine effects, `Effect::Simultaneous` (everybody picks at once), `Effect::Rotate` (pass a zone's cards around the
+table) and `Effect::Shuffle`; the game owns only the composition (`draft()` in `rules.rs`) and the zones `DRAFT` and
+`STOCK`. `tests/draft.rs` checks the passing directions, that everybody ends with 8 different artifacts and 3 in hand,
+and that a drafted game replays identically.
+
 ### How cards become engine data
 
 The core engine never sees `CardSpec`. The **compile step** in the game crate (`games/res-arcana/src/compile.rs`)
@@ -374,7 +386,7 @@ Play the toy game with random bots; every game is replayed afterwards and the re
 ```sh
 cargo run -p gamelib-cli --release -- --games 100 --seed 1 --players 2
 cargo run -p gamelib-cli --release -- --game res-arcana --bot heuristic --games 20 --players 3
-# options: --games N  --seed S  --players P (1..=8)  --max-actions M
+# options: --games N  --seed S  --players P (1..=8)  --max-actions M  --draft (Res Arcana draft variant)
 ```
 
 Replay verification in your own code is the `Engine::replay` snippet above: replay `engine.log()` from the same seed and

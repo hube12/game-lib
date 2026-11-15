@@ -4,7 +4,7 @@ import { h, clear } from './gamelib-gui/dom.js';
 import { Model, findZone, zoneView, decisionDialog, decidedOnCards, logView, scoreboard, poolView, hidePopup } from './gamelib-gui/components.js';
 
 // Zone roles, phases and counters of this game (the same ids the Rust side names).
-const ZONE = { HAND: 1, TABLEAU: 3, MONUMENT_DECK: 10, PLACES: 11, MONUMENT_ROW: 12, ITEMS: 13, CANDIDATES: 14, DECK: 0 };
+const ZONE = { HAND: 1, TABLEAU: 3, MONUMENT_DECK: 10, PLACES: 11, MONUMENT_ROW: 12, ITEMS: 13, CANDIDATES: 14, DRAFT: 17, DECK: 0 };
 const COUNTER = { FIRST_TOKEN: 2 };
 
 const app = document.getElementById('app');
@@ -13,7 +13,7 @@ let snapshot = null;
 let viewer = 0;
 let error = null;
 
-const defaults = { players: 2, seed: 1, german: false };
+const defaults = { players: 2, seed: 1, german: false, draft: false };
 function loadSettings() {
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem('res-arcana') ?? '{}') };
@@ -32,7 +32,7 @@ let settings = loadSettings();
 
 async function newGame() {
   try {
-    snapshot = await call({ type: 'new_game', players: settings.players, seed: settings.seed, humans: [0] });
+    snapshot = await call({ type: 'new_game', players: settings.players, seed: settings.seed, humans: [0], options: settings.draft ? ['draft'] : [] });
     viewer = 0;
     error = null;
     saveSettings(settings);
@@ -137,6 +137,12 @@ function controls() {
     h('label', null, 'Seed', seed),
     h(
       'label',
+      { title: 'Draft variant for the next new game: keep 1 of 4 artifacts and pass the rest (left, then right) instead of a random deck' },
+      h('input', { id: 'draft', type: 'checkbox', checked: settings.draft, onchange: (e) => { settings.draft = e.target.checked; saveSettings(settings); } }),
+      ' Draft',
+    ),
+    h(
+      'label',
       { title: 'Show the German printed names next to the English ones' },
       h('input', {
         id: 'german',
@@ -220,6 +226,7 @@ function mine(me, board, actions, onAct) {
   const tableau = findZone(board, ZONE.TABLEAU, me.id);
   const hand = findZone(board, ZONE.HAND, me.id);
   const candidates = findZone(board, ZONE.CANDIDATES, me.id);
+  const draft = findZone(board, ZONE.DRAFT, me.id);
   const token = me.counters.find((c) => c.counter === COUNTER.FIRST_TOKEN)?.value > 0;
   return h(
     'section',
@@ -232,6 +239,7 @@ function mine(me, board, actions, onAct) {
       snapshot.can_undo ? h('button', { id: 'undo-turn', title: 'Take back what you did this turn', onclick: () => turn({ type: 'undo' }) }, 'Undo') : null,
       poolView(model, me.pool),
       token ? h('span', { class: 'counts' }, 'first player token') : null),
+    draft?.cards.length ? zoneView(model, draft, actions, onAct, { title: 'Draft: keep one artifact, pass the rest' }) : null,
     candidates?.cards.length ? zoneView(model, candidates, actions, onAct, { title: 'Mages to choose from' }) : null,
     tableau ? zoneView(model, tableau, actions, onAct, { title: 'In play' }) : null,
     hand ? zoneView(model, hand, actions, onAct, { title: 'Hand' }) : null,

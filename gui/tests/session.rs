@@ -44,6 +44,7 @@ fn session(players: u8, humans: Vec<u8>) -> Session<ToyUi> {
             players,
             seed: Some(3),
             humans: Some(humans),
+            options: Vec::new(),
         },
         &ToyUi.description(),
     )
@@ -102,6 +103,7 @@ fn bad_settings_are_explained() {
                 players,
                 seed: None,
                 humans: Some(humans),
+                options: Vec::new(),
             },
             &ToyUi.description(),
         )

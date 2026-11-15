@@ -52,7 +52,7 @@ use crate::{
         resource,
         tag,
     },
-    rules::{CANDIDATES, FIRST_TOKEN, MONUMENT_ROW, PLACES, ResArcanaRules, WIN_SCORE},
+    rules::{CANDIDATES, DRAFT, FIRST_TOKEN, MONUMENT_ROW, PLACES, ResArcanaRules, WIN_SCORE},
 };
 
 /// The numbers the evaluation is built on. Values are in "essence units": one
@@ -1092,15 +1092,12 @@ impl PlannerBot {
         self.eval.position(&state, me, frame, true)
     }
 
-    /// Which of two dealt mages to keep: the one that makes more per round.
+    /// A decision everybody takes at once at the start of the game: which of
+    /// two dealt mages to keep (the one that makes more per round), or in the
+    /// draft variant which artifact of the pack to keep (the one that makes
+    /// the most per round, then the one worth the most points).
     fn keep_mage(&self, state: &GameState, me: PlayerId, legal: &[Action]) -> usize {
         let frame = self.eval.frame(state);
-        let dealt = Eval::zone(state, &Owner::Player(me), CANDIDATES);
-        let worth = |i: usize| {
-            dealt.get(i).and_then(|e| self.eval.model_of_entity(state, *e)).map_or(0.0, |m| {
-                self.eval.income(m, None, &frame, 1.0, false, &[]).0
-            })
-        };
         let Some(pending) = &state.pending else {
             return 0;
         };
@@ -1111,12 +1108,22 @@ impl PlannerBot {
             };
             let kept = match pending.options.get(*option) {
                 Some(Effect::Sequence(steps)) => steps.iter().find_map(|s| match s {
-                    Effect::MoveNth { index, .. } => Some(*index),
+                    Effect::MoveNth { index, .. } => Some((CANDIDATES, *index)),
                     _ => None,
                 }),
+                Some(Effect::MoveNth { from, index, .. }) => Some((*from, *index)),
                 _ => None,
             };
-            let value = kept.map_or(0.0, worth);
+            let value = kept.map_or(0.0, |(from, index)| {
+                let zone = Eval::zone(state, &Owner::Player(me), from);
+                zone.get(index).and_then(|e| self.eval.model_of_entity(state, *e)).map_or(
+                    0.0,
+                    |m| {
+                        let points = if from == DRAFT { m.vp * 0.01 } else { 0.0 };
+                        self.eval.income(m, None, &frame, 1.0, false, &[]).0 + points
+                    },
+                )
+            });
             if value > best.0 {
                 best = (value, at);
             }
@@ -1208,7 +1215,7 @@ impl Bot for PlannerBot {
         let deciding = matches!(legal.first(), Some(Action::Decide(_)));
         if deciding && state.pending.as_ref().is_some_and(|p| p.players.len() > 1) {
             let choice = self.keep_mage(state, me, legal);
-            self.note = Some("kept the mage that makes more".to_owned());
+            self.note = Some("kept the card that makes more".to_owned());
             return choice;
         }
 

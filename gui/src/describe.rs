@@ -392,6 +392,13 @@ impl<'a> Describer<'a> {
             Effect::Ignore => "do nothing".to_owned(),
             Effect::ReactWindow { kind, .. } => format!("a reaction window ({})", kind.0),
             Effect::CheckWin => "check whether somebody won".to_owned(),
+            Effect::Shuffle { zone, .. } => format!("shuffle {}", self.zone_name(*zone)),
+            Effect::Rotate { zone, step } => format!(
+                "everybody passes {} to the {} player",
+                self.zone_name(*zone),
+                if *step < 0 { "previous" } else { "next" }
+            ),
+            Effect::Simultaneous(_) => "everybody chooses at the same time".to_owned(),
             Effect::Reorder { zone, n, .. } => {
                 format!(
                     "look at the top {n} of {} and put them back in any order",
@@ -497,7 +504,7 @@ impl<'a> Describer<'a> {
                     Self::mention(ids, *e);
                 }
             },
-            Effect::Choose(list) | Effect::Sequence(list) => {
+            Effect::Choose(list) | Effect::Sequence(list) | Effect::Simultaneous(list) => {
                 for e in list {
                     self.collect_cards(e, ids);
                 }

@@ -19,6 +19,7 @@ fn selfplay(games: u64, first_seed: u64, players: u8) {
             players,
             seed: Some(seed),
             humans: Some(Vec::new()),
+            options: Vec::new(),
         }));
         match answer {
             Response::Snapshot(snapshot) => {

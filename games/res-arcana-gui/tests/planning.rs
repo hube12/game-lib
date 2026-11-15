@@ -26,6 +26,7 @@ fn at_the_first_action(seed: u64) -> (Backend<ResArcanaUi>, Snapshot) {
         players: 2,
         seed:    Some(seed),
         humans:  Some(vec![0]),
+        options: Vec::new(),
     })));
     while !s.actions.iter().any(|a| a.kind == "pass") {
         let first = s.actions.first().expect("something to decide").index;

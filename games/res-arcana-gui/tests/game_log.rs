@@ -31,6 +31,7 @@ fn a_game_between_bots_is_logged_from_start_to_end() {
         players: 2,
         seed:    Some(3),
         humans:  Some(Vec::new()),
+        options: Vec::new(),
     }));
     let Response::Snapshot(snapshot) = answer else {
         panic!("the game starts: {answer:?}");
@@ -80,6 +81,7 @@ fn a_persons_moves_are_logged_too_and_no_log_dir_means_no_files() {
             players: 2,
             seed:    Some(5),
             humans:  Some(vec![0]),
+            options: Vec::new(),
         })
     };
     let Response::Snapshot(mut snapshot) = backend.handle(new_game()) else {

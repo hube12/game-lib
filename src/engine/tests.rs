@@ -2745,3 +2745,134 @@ fn place_card_can_take_its_cards_from_another_zone() {
     assert_eq!(e.state().zone(owned(&e, P0, DISCARD)).unwrap().len(), 0);
     assert_eq!(e.state().zone(owned(&e, P0, HAND)).unwrap().len(), 1);
 }
+
+/// Three cards of definition 1 in every player's hand, then `effect` as the
+/// first thing that resolves.
+fn hands_then(s: &mut GameState, ps: &[PlayerId], effect: Effect) {
+    s.add_def(card(1, |_| {}));
+    for &p in ps {
+        for _ in 0..3 {
+            put(s, 1, &Owner::Player(p), HAND, true);
+        }
+    }
+    s.stack.push(Task::Effect {
+        effect,
+        ctx: Ctx::new(None, ps[0]),
+    });
+}
+
+fn hand_cards(e: &Engine<TestRules>, p: PlayerId) -> Vec<EntityId> {
+    e.state().zone(owned(e, p, HAND)).unwrap().entities().to_vec()
+}
+
+fn rotated(step: i32) -> (Vec<Vec<EntityId>>, Vec<Vec<EntityId>>) {
+    fn forward(s: &mut GameState, ps: &[PlayerId]) {
+        hands_then(
+            s,
+            ps,
+            Effect::Rotate {
+                zone: HAND,
+                step: 1,
+            },
+        );
+    }
+    fn back(s: &mut GameState, ps: &[PlayerId]) {
+        hands_then(
+            s,
+            ps,
+            Effect::Rotate {
+                zone: HAND,
+                step: -1,
+            },
+        );
+    }
+    fn around(s: &mut GameState, ps: &[PlayerId]) {
+        hands_then(
+            s,
+            ps,
+            Effect::Rotate {
+                zone: HAND,
+                step: 3,
+            },
+        );
+    }
+    let setup = match step {
+        1 => forward,
+        -1 => back,
+        _ => around,
+    };
+    let before = Engine::from_state(
+        TestRules::new(setup),
+        TestRules::new(setup).setup(&[P0, P1, P2], Rng::from_seed(1)),
+    );
+    let after = Engine::new(TestRules::new(setup), 3, 1).unwrap();
+    let hands = |e: &Engine<TestRules>| [P0, P1, P2].map(|p| hand_cards(e, p)).into();
+    (hands(&before), hands(&after))
+}
+
+#[test]
+fn rotate_passes_every_players_cards_to_the_next_seat_and_back() {
+    // (step, the seat whose cards each seat ends up with)
+    for (step, giver) in [(1, [2, 0, 1]), (-1, [1, 2, 0]), (3, [0, 1, 2])] {
+        let (before, after) = rotated(step);
+        for seat in 0..3 {
+            assert_eq!(after[seat], before[giver[seat]], "step {step}: seat {seat}");
+        }
+    }
+}
+
+#[test]
+fn shuffle_reorders_a_zone_without_losing_cards() {
+    fn setup(s: &mut GameState, ps: &[PlayerId]) {
+        s.add_def(card(1, |_| {}));
+        for _ in 0..20 {
+            put(s, 1, &Owner::Player(ps[0]), DECK, false);
+        }
+        s.stack.push(Task::Effect {
+            effect: Effect::Shuffle {
+                owner: OwnerRef::Controller,
+                zone:  DECK,
+            },
+            ctx:    Ctx::new(None, ps[0]),
+        });
+    }
+    let before: Vec<_> = {
+        let s = TestRules::new(setup).setup(&[P0, P1], Rng::from_seed(1));
+        s.zone(zone(&s, &Owner::Player(P0), DECK)).unwrap().entities().to_vec()
+    };
+    let e = engine(TestRules::new(setup), 2);
+    let after = e.state().zone(owned(&e, P0, DECK)).unwrap().entities().to_vec();
+    assert_ne!(before, after, "the order changed");
+    let (mut a, mut b) = (before, after);
+    a.sort();
+    b.sort();
+    assert_eq!(a, b, "no card appeared or vanished");
+}
+
+#[test]
+fn a_simultaneous_decision_waits_for_everybody_and_resolves_for_each() {
+    fn setup(s: &mut GameState, ps: &[PlayerId]) {
+        s.stack.push(Task::Effect {
+            effect: Effect::Simultaneous(vec![gain(COIN, 1), gain(GEM, 1)]),
+            ctx:    Ctx::new(None, ps[0]),
+        });
+    }
+    let mut e = engine(TestRules::new(setup), 3);
+    let pending = e.pending().expect("a decision is pending");
+    assert_eq!(pending.players, vec![P0, P1, P2], "everybody takes part");
+    e.apply(P2, Action::Decide(1)).unwrap();
+    e.apply(P0, Action::Decide(0)).unwrap();
+    assert!(e.pending().is_some(), "P1 has not answered yet");
+    e.apply(P1, Action::Decide(0)).unwrap();
+    assert!(e.pending().is_none());
+    let gems = |p| e.state().player_pool(p).unwrap().finite(GEM);
+    assert_eq!(
+        (coins(&e, P0), coins(&e, P1), coins(&e, P2)),
+        (Some(1), Some(1), Some(0))
+    );
+    assert_eq!(
+        gems(P2),
+        Some(1),
+        "each answer resolved for the player who gave it"
+    );
+}

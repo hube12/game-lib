@@ -50,7 +50,18 @@ use gamelib_res_arcana::{
         type_tag,
     },
     planner::PlannerBot,
-    rules::{ASIDE, CANDIDATES, FIRST_TOKEN, ITEMS, MONUMENT_ROW, PLACES, ResArcanaRules, UNUSED},
+    rules::{
+        ASIDE,
+        CANDIDATES,
+        DRAFT,
+        FIRST_TOKEN,
+        ITEMS,
+        MONUMENT_ROW,
+        PLACES,
+        ResArcanaRules,
+        STOCK,
+        UNUSED,
+    },
 };
 
 /// The page and its styles, served next to the shared components.
@@ -77,6 +88,10 @@ pub const PAGES: &[Asset] = &[
 pub struct ResArcanaUi {
     rules: ResArcanaRules,
 }
+
+/// The option that turns on the draft variant (see
+/// [`ResArcanaRules::with_draft`]).
+pub const DRAFT_OPTION: &str = "draft";
 
 impl ResArcanaUi {
     /// The base game.
@@ -290,6 +305,17 @@ fn zones() -> Vec<NamedId> {
         ),
         (UNUSED.0, "Unused mages", "Mages that were not kept."),
         (
+            DRAFT.0,
+            "Artifacts to draft",
+            "Draft variant: keep one of these artifacts for your deck and pass the rest on (to \
+             the left in the first half, to the right in the second).",
+        ),
+        (
+            STOCK.0,
+            "Artifacts still to be dealt",
+            "Draft variant: your next four artifacts, dealt when the current ones are used up.",
+        ),
+        (
             ASIDE.0,
             "Item being swapped",
             "The magic item you gave up while you pick its replacement; it goes back to the \
@@ -358,6 +384,11 @@ impl GameUi for ResArcanaUi {
 
     fn rules(&self) -> ResArcanaRules {
         self.rules.clone()
+    }
+
+    fn with_options(mut self, options: &[String]) -> Self {
+        self.rules = self.rules.with_draft(options.iter().any(|o| o == DRAFT_OPTION));
+        self
     }
 
     fn description(&self) -> GameDescription {

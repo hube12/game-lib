@@ -1117,6 +1117,31 @@ impl<R: GameRules> Engine<R> {
         Ok(())
     }
 
+    /// Moves every player's cards of one zone kind to the same zone of the
+    /// player `step` seats along the turn order. Everything is collected
+    /// first, so cards do not travel twice.
+    fn rotate(&mut self, kind: ZoneKind, step: i32) -> Result<(), RuleError> {
+        let order = self.state.flow.turn_order.order().to_vec();
+        let seats = i64::try_from(order.len()).map_err(|_| RuleError::Illegal)?;
+        let mut moves = Vec::new();
+        for (i, player) in order.iter().enumerate() {
+            let from = self.state.zone_id(&Owner::Player(*player), kind)?;
+            let target = (i64::try_from(i).map_err(|_| RuleError::Illegal)? + i64::from(step))
+                .rem_euclid(seats);
+            let to = self.state.zone_id(
+                &Owner::Player(order[usize::try_from(target).map_err(|_| RuleError::Illegal)?]),
+                kind,
+            )?;
+            moves.push((self.state.zone(from)?.entities().to_vec(), to));
+        }
+        for (cards, to) in moves {
+            for card in cards {
+                self.state.move_entity(card, to, Pos::Top)?;
+            }
+        }
+        Ok(())
+    }
+
     fn decide(&mut self, player: PlayerId, choice: usize) -> Result<(), RuleError> {
         let pending = self.state.pending.as_mut().ok_or(RuleError::Illegal)?;
         pending.answers.push((player, choice));
@@ -1443,6 +1468,24 @@ impl<R: GameRules> Engine<R> {
                 let entity =
                     *self.state.zone(from)?.entities().get(index).ok_or(RuleError::BadTarget)?;
                 self.state.move_entity(entity, to, Pos::Top)?;
+            },
+            Effect::Shuffle { owner, zone } => {
+                let zone = self.state.zone_id(&ctx.owner(&owner), zone)?;
+                self.state.shuffle(zone)?;
+            },
+            Effect::Rotate { zone, step } => self.rotate(zone, step)?,
+            Effect::Simultaneous(options) => {
+                let players = self.state.flow.turn_order.order().to_vec();
+                if !players.is_empty() && !options.is_empty() {
+                    self.state.emit(Event::DecisionRequested(players.clone()));
+                    self.state.pending = Some(PendingDecision {
+                        players,
+                        options,
+                        answers: Vec::new(),
+                        source: ctx.source,
+                        bound: ctx.bound,
+                    });
+                }
             },
             Effect::ResetCounters { counter } => {
                 for c in self.state.counters.iter_mut().filter(|c| c.id == counter) {

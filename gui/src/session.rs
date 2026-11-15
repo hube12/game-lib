@@ -29,6 +29,13 @@ pub trait GameUi: Clone + Send + 'static {
     /// A fresh copy of the rules.
     fn rules(&self) -> Self::Rules;
 
+    /// The same game with the options (variants) a new game asks for. Games
+    /// without variants keep the default, which ignores them.
+    #[must_use]
+    fn with_options(self, _options: &[String]) -> Self {
+        self
+    }
+
     /// Names, colors and card text.
     fn description(&self) -> GameDescription;
 
@@ -63,6 +70,10 @@ pub struct NewGame {
     /// Seats played by a person; the rest are bots. Defaults to seat 0.
     #[serde(default)]
     pub humans:  Option<Vec<u8>>,
+    /// Game-specific options (variants), by the ids the game lists in its
+    /// description; unknown ones are ignored.
+    #[serde(default)]
+    pub options: Vec<String>,
 }
 
 /// An action the viewer may take now. `index` is what to send back.
@@ -295,6 +306,7 @@ impl<G: GameUi> Session<G> {
                 description.min_players, description.max_players, game.players
             ));
         }
+        let ui = ui.with_options(&game.options);
         let seed = game.seed.unwrap_or(1);
         let humans: Vec<PlayerId> =
             game.humans.clone().unwrap_or_else(|| vec![0]).into_iter().map(PlayerId).collect();

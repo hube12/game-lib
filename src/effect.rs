@@ -274,6 +274,23 @@ pub enum Effect {
         /// Owner of both zones.
         owner: OwnerRef,
     },
+    /// Shuffles a zone with the game's generator.
+    Shuffle {
+        /// Zone owner.
+        owner: OwnerRef,
+        /// Zone kind.
+        zone:  ZoneKind,
+    },
+    /// Every player's cards in a zone move to the same kind of zone of the
+    /// player `step` seats further along the turn order (a negative step goes
+    /// the other way): passing cards around the table, all at the same time.
+    Rotate {
+        /// Zone kind, one per player.
+        zone: ZoneKind,
+        /// Seats to move: `1` is the next player in turn order, `-1` the
+        /// previous one.
+        step: i32,
+    },
     /// Add to a counter (clamped to its bounds).
     ModifyCounter {
         /// The counter.
@@ -416,6 +433,10 @@ pub enum Effect {
         /// Offer again after a reaction.
         repeat:  bool,
     },
+    /// Every player, at the same time, picks one of these options (each
+    /// resolves with that player as controller). Unlike a plain choice, nobody
+    /// waits for anybody else to answer.
+    Simultaneous(Vec<Effect>),
     /// Evaluates the game's win condition now.
     CheckWin,
     /// The controller picks how to reorder the top `n` cards of a zone (put

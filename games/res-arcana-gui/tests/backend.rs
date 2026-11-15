@@ -10,7 +10,11 @@ use gamelib_gui::{
     Snapshot,
     describe::{Describer, TERM_END, TERM_SEP, TERM_START, plain},
 };
-use gamelib_res_arcana::{CardKind, compile::HAND, rules::ResArcanaRules};
+use gamelib_res_arcana::{
+    CardKind,
+    compile::HAND,
+    rules::{DRAFT, ResArcanaRules},
+};
 use gamelib_res_arcana_gui::{ResArcanaUi, backend};
 
 fn snapshot(response: Response) -> Snapshot {
@@ -26,6 +30,7 @@ fn start(players: u8, seed: u64) -> (gamelib_gui::Backend<ResArcanaUi>, Snapshot
         players,
         seed: Some(seed),
         humans: Some(vec![0]),
+        options: Vec::new(),
     })));
     (b, s)
 }
@@ -542,4 +547,38 @@ fn planning_never_moves_a_bot_and_waiting_bots_hold_until_it_is_left() {
     let left = snapshot(b.handle(Request::PlanStop { viewer: 0 }));
     assert_eq!(left.log, log_before, "the bot did not move while planning");
     assert_eq!(left.acting, [0]);
+}
+
+fn pack(s: &Snapshot, seat: u8) -> &gamelib_gui::board::ZoneDto {
+    s.board.zones.iter().find(|z| z.kind == DRAFT.0 && z.owner == Some(vec![seat])).unwrap()
+}
+
+#[test]
+fn the_draft_option_deals_a_pack_to_pick_from_and_hides_the_rivals_packs() {
+    let mut b = backend();
+    let s = snapshot(b.handle(Request::NewGame(gamelib_gui::NewGame {
+        players: 3,
+        seed:    Some(2),
+        humans:  Some(vec![0]),
+        options: vec![gamelib_res_arcana_gui::DRAFT_OPTION.to_owned()],
+    })));
+    assert_eq!(pack(&s, 0).cards.len(), 4, "the viewer sees their own pack");
+    assert!(
+        pack(&s, 1).cards.iter().all(|c| c.def.is_none()),
+        "and nobody else's"
+    );
+    let picks: Vec<_> = s.actions.iter().filter(|a| a.kind == "decide").collect();
+    assert_eq!(picks.len(), 4, "one pick per card of the pack");
+
+    // Picking passes the rest on: the viewer's pack is now what a rival left.
+    let s = snapshot(b.handle(Request::Act {
+        viewer:   0,
+        revision: s.revision,
+        action:   picks[0].index,
+    }));
+    assert_eq!(pack(&s, 0).cards.len(), 3);
+
+    // Without the option nothing changes.
+    let (_, plain) = start(3, 2);
+    assert!(plain.board.zones.iter().all(|z| z.kind != DRAFT.0));
 }

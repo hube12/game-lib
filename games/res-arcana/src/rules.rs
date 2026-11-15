@@ -4,6 +4,9 @@
 //! Everything game specific is data or a composition of the engine's generic
 //! effects; the core crate knows nothing about Res Arcana.
 //!
+//! The optional draft variant ([`ResArcanaRules::with_draft`]) replaces the
+//! random starting decks by a draft: see [`DRAFT`].
+//!
 //! Simplifications (see `plan.md`): the magic items have no "passed side";
 //! the places of power are the photographed (first game) sides only; cards
 //! that the compiler cannot express are left out of the box.
@@ -66,6 +69,15 @@ pub const UNUSED: ZoneKind = ZoneKind(15);
 /// The magic item a player is swapping away while they pick the new one.
 pub const ASIDE: ZoneKind = ZoneKind(16);
 
+/// The artifacts a player is choosing from in the draft variant: the pack
+/// they hold now, passed on around the table after every pick.
+pub const DRAFT: ZoneKind = ZoneKind(17);
+/// The artifacts dealt to a player in the draft variant that are not in a
+/// pack yet.
+pub const STOCK: ZoneKind = ZoneKind(18);
+/// Artifacts dealt to each player at the start of one draft round.
+pub const DRAFT_PACK: u32 = 4;
+
 /// 1 while the player holds the first player token (1 VP at a victory check).
 pub const FIRST_TOKEN: CounterId = CounterId(2);
 
@@ -83,6 +95,7 @@ pub const ESSENCES: [gamelib::id::ResourceId; 5] = [ELAN, LIFE, CALM, DEATH, GOL
 pub struct ResArcanaRules {
     specs:    Vec<CardSpec>,
     compiled: Compiled,
+    draft:    bool,
 }
 
 impl ResArcanaRules {
@@ -99,7 +112,28 @@ impl ResArcanaRules {
         for def in &mut compiled.defs {
             def.abilities.push(take_from_card());
         }
-        Self { specs, compiled }
+        Self {
+            specs,
+            compiled,
+            draft: false,
+        }
+    }
+
+    /// The same game with or without the draft variant: instead of being dealt
+    /// 8 random artifacts, every player is dealt 4, keeps 1 and passes the
+    /// rest to the left, until no artifact is left to pass; then 4 more, kept
+    /// the same way but passed to the right. The 8 kept artifacts are
+    /// shuffled into the starting deck and the first 3 are drawn. Mages and
+    /// magic items are chosen afterwards, as in the normal game.
+    #[must_use]
+    pub const fn with_draft(mut self, draft: bool) -> Self {
+        self.draft = draft;
+        self
+    }
+
+    /// Whether the draft variant is on.
+    pub const fn draft(&self) -> bool {
+        self.draft
     }
 
     /// The compiled cards (ids are positions in the card file).
@@ -186,6 +220,62 @@ fn discard_reward() -> Effect {
             identical: false,
         },
     ])
+}
+
+/// Keep the `i`-th artifact of the pack in front of you.
+const fn keep_artifact(i: usize) -> Effect {
+    Effect::MoveNth {
+        from:  DRAFT,
+        index: i,
+        to:    DECK,
+        owner: OwnerRef::Controller,
+    }
+}
+
+/// Every player's effect, one after the other.
+fn each(effect: Effect) -> Effect {
+    Effect::ForEachPlayer(Box::new(effect))
+}
+
+/// One half of the draft: deal [`DRAFT_PACK`] artifacts to everybody, then
+/// everybody keeps one and passes the rest `step` seats along (1 is to the
+/// left, -1 to the right) until each pack is down to its last card, which the
+/// player who ends up with it keeps.
+fn draft_half(step: i32) -> Vec<Effect> {
+    let mut steps = vec![each(Effect::Draw {
+        who:  OwnerRef::Controller,
+        from: STOCK,
+        to:   DRAFT,
+        n:    DRAFT_PACK,
+    })];
+    for size in (2..=DRAFT_PACK as usize).rev() {
+        steps.push(Effect::Simultaneous((0..size).map(keep_artifact).collect()));
+        steps.push(Effect::Rotate { zone: DRAFT, step });
+    }
+    steps.push(each(Effect::MoveAll {
+        from:  DRAFT,
+        to:    DECK,
+        owner: OwnerRef::Controller,
+    }));
+    steps
+}
+
+/// The whole draft: two halves in opposite directions, then everybody shuffles
+/// their 8 artifacts into a deck and draws the opening hand.
+fn draft() -> Effect {
+    let mut steps = draft_half(1);
+    steps.extend(draft_half(-1));
+    steps.push(each(Effect::Shuffle {
+        owner: OwnerRef::Controller,
+        zone:  DECK,
+    }));
+    steps.push(each(Effect::Draw {
+        who:  OwnerRef::Controller,
+        from: DECK,
+        to:   HAND,
+        n:    HAND_SIZE,
+    }));
+    Effect::Sequence(steps)
 }
 
 /// Keep the `i`-th dealt mage, set the other aside.
@@ -440,6 +530,7 @@ impl ResArcanaRules {
         p: PlayerId,
         mages: &mut impl Iterator<Item = DefId>,
         artifacts: &mut impl Iterator<Item = DefId>,
+        draft: bool,
     ) {
         s.add_player(p);
         let owner = Owner::Player(p);
@@ -470,6 +561,14 @@ impl ResArcanaRules {
         }
         for def in mages.take(2) {
             let _ = s.create_entity(def, candidates, true);
+        }
+        if draft {
+            s.add_zone(DRAFT, owner.clone(), Order::Unordered, Visibility::Owner);
+            let stock = s.add_zone(STOCK, owner.clone(), Order::Stack, Visibility::Hidden);
+            for def in artifacts.take(DECK_SIZE) {
+                let _ = s.create_entity(def, stock, true);
+            }
+            return;
         }
         for def in artifacts.take(DECK_SIZE) {
             let _ = s.create_entity(def, deck, true);
@@ -553,7 +652,13 @@ impl GameRules for ResArcanaRules {
         s.rng.shuffle(&mut mages);
         let (mut dealt_artifacts, mut dealt_mages) = (artifacts.into_iter(), mages.into_iter());
         for &p in players {
-            Self::seat(&mut s, p, &mut dealt_mages, &mut dealt_artifacts);
+            Self::seat(
+                &mut s,
+                p,
+                &mut dealt_mages,
+                &mut dealt_artifacts,
+                self.draft,
+            );
         }
 
         s.flow = Flow {
@@ -564,14 +669,18 @@ impl GameRules for ResArcanaRules {
             ..Flow::default()
         };
 
-        // Everybody keeps one of their two mages, at the same time.
-        s.pending = Some(PendingDecision {
-            players: players.to_vec(),
-            options: vec![keep_mage(0), keep_mage(1)],
-            answers: Vec::new(),
-            source:  None,
-            bound:   Bound::default(),
-        });
+        // Everybody keeps one of their two mages, at the same time (after the
+        // draft, when there is one).
+        let mages_options = vec![keep_mage(0), keep_mage(1)];
+        if !self.draft {
+            s.pending = Some(PendingDecision {
+                players: players.to_vec(),
+                options: mages_options.clone(),
+                answers: Vec::new(),
+                source:  None,
+                bound:   Bound::default(),
+            });
+        }
         // Then the magic items are picked in reverse turn order. The stack
         // resolves its top first, so the first player's pick is pushed first.
         for &p in players {
@@ -579,6 +688,16 @@ impl GameRules for ResArcanaRules {
                 effect: take_item(),
                 ctx:    gamelib::effect::Ctx::new(None, p),
             });
+        }
+        if self.draft {
+            // On top of the item picks, so it resolves first: the draft, then
+            // the mages.
+            for effect in [Effect::Simultaneous(mages_options), draft()] {
+                s.stack.push(Task::Effect {
+                    effect,
+                    ctx: gamelib::effect::Ctx::new(None, players[0]),
+                });
+            }
         }
         s
     }
