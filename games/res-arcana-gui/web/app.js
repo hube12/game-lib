@@ -1,7 +1,7 @@
 // The Res Arcana page: lays the shared components out for this game.
 import { call } from './gamelib-gui/transport.js';
 import { h, clear } from './gamelib-gui/dom.js';
-import { Model, findZone, zoneView, decisionDialog, decidedOnCards, logView, scoreboard, poolView, hidePopup, playOpening } from './gamelib-gui/components.js';
+import { Model, findZone, zoneView, decisionDialog, decidedOnCards, logView, scoreboard, poolView, hidePopup, playOpening, turnOrder } from './gamelib-gui/components.js';
 
 // Zone roles, phases and counters of this game (the same ids the Rust side names).
 const ZONE = { HAND: 1, TABLEAU: 3, MONUMENT_DECK: 10, PLACES: 11, MONUMENT_ROW: 12, ITEMS: 13, CANDIDATES: 14, DRAFT: 17, DECK: 0 };
@@ -42,7 +42,7 @@ async function newGame() {
   render();
   // Who starts was rolled by dice: show them being thrown.
   if (snapshot?.opening) {
-    await playOpening(snapshot.opening, new Map(snapshot.board.players.map((p) => [p.id, p.name])));
+    await playOpening(snapshot.opening, new Map(snapshot.board.players.map((p) => [p.id, p.human ? `${p.name} (you)` : p.name])));
   }
 }
 
@@ -342,7 +342,7 @@ function render() {
         middle(board, cardActions, act),
         board.players.filter((p) => p.id !== board.viewer).map((p) => opponent(p, board)),
       ),
-      h('aside', { class: 'side' }, snapshot.plan ? planPanel(snapshot.plan) : null, h('section', { class: 'panel' }, h('h3', null, 'Score'), scoreboard(model, snapshot)), h('section', { class: 'panel' }, h('h3', null, 'Log'), logView(model, snapshot.log))),
+      h('aside', { class: 'side' }, snapshot.plan ? planPanel(snapshot.plan) : null, h('section', { class: 'panel' }, h('h3', null, 'Score'), scoreboard(model, snapshot)), h('section', { class: 'panel' }, h('h3', null, 'Turn order'), turnOrder(snapshot)), h('section', { class: 'panel' }, h('h3', null, 'Log'), logView(model, snapshot.log))),
     ),
     bar(cardActions, act, canAct, decisions.length > 0 && human, onCards ? decisions : null),
     decisions.length && human && !onCards ? decisionDialog(model, decisions, act, { title: 'Your decision' }) : null,

@@ -576,6 +576,24 @@ export function scoreboard(model, snapshot) {
   );
 }
 
+/** The seats in turn order, the player to move highlighted. */
+export function turnOrder(snapshot) {
+  const { board } = snapshot;
+  return h(
+    'ol',
+    { class: 'turn-order' },
+    board.players.map((p) =>
+      h(
+        'li',
+        { class: `seat p${p.id}${board.active === p.id ? ' active' : ''}${p.passed ? ' passed' : ''}` },
+        h('span', { class: 'name' }, p.name, p.human ? ' (you)' : ' (bot)'),
+        p.passed ? h('small', null, ' · passed') : null,
+        board.active === p.id ? h('small', null, ' · to move') : null,
+      ),
+    ),
+  );
+}
+
 // ---- Dice: who starts ----
 
 // Which pips each face shows, as cells of a 3x3 grid (0..8, row by row).

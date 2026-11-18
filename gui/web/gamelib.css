@@ -149,3 +149,6 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
 .die-slot.top .die-scene { filter: drop-shadow(0 0 14px var(--active)); }
 .die-slot.out { opacity: .45; }
 .dice-skip { font-size: 12px; opacity: .8; }
+.turn-order { margin: 0; padding-left: 22px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.turn-order li.active { font-weight: 700; color: var(--active); }
+.turn-order li.passed { color: var(--muted); }
