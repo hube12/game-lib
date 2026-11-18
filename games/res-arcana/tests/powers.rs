@@ -84,7 +84,8 @@ const G: ResourceId = GOLD;
 type Qty = (ResourceId, u32);
 
 fn shared_rules() -> ResArcanaRules {
-    static RULES: LazyLock<ResArcanaRules> = LazyLock::new(ResArcanaRules::new);
+    static RULES: LazyLock<ResArcanaRules> =
+        LazyLock::new(|| ResArcanaRules::new().with_random_start(false));
     RULES.clone()
 }
 

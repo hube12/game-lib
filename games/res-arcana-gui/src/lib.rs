@@ -14,10 +14,12 @@ use gamelib::{bot::Bot, id::PlayerId, rng::Rng, state::GameState};
 use gamelib_gui::{
     Backend,
     CardInfo,
+    DieRoll,
     GameDescription,
     GameUi,
     NamedId,
     Names,
+    Opening,
     ResourceInfo,
     ScoreLine,
     describe::Describer,
@@ -400,6 +402,26 @@ impl GameUi for ResArcanaUi {
             .find_map(|o| o.strip_prefix(DIFFICULTY_OPTION)?.parse().ok())
             .map_or(Difficulty::MAX, Difficulty::new);
         self
+    }
+
+    fn opening(&self, players: u8, seed: u64) -> Option<Opening> {
+        let rolls = ResArcanaRules::opening(players, seed);
+        Some(Opening {
+            rounds: rolls
+                .rounds
+                .iter()
+                .map(|round| {
+                    round
+                        .iter()
+                        .map(|(p, value)| DieRoll {
+                            player: p.0,
+                            value:  *value,
+                        })
+                        .collect()
+                })
+                .collect(),
+            first:  rolls.first.0,
+        })
     }
 
     fn description(&self) -> GameDescription {

@@ -18,7 +18,12 @@ const P1: PlayerId = PlayerId(1);
 type Game = Engine<ResArcanaRules>;
 
 fn new_game(players: u8, seed: u64) -> Game {
-    Engine::new(ResArcanaRules::new(), players, seed).expect("the game sets up")
+    Engine::new(
+        ResArcanaRules::new().with_random_start(false),
+        players,
+        seed,
+    )
+    .expect("the game sets up")
 }
 
 /// Everybody who may act right now, with what they may do.
@@ -83,7 +88,7 @@ fn started(players: u8, seed: u64) -> Game {
 
 #[test]
 fn the_table_is_set_up_by_the_rulebook() {
-    let rules = ResArcanaRules::new();
+    let rules = ResArcanaRules::new().with_random_start(false);
     let expected_mages = rules.defs_of(CardKind::Mage).len();
     assert!(expected_mages > 0);
 
@@ -371,7 +376,7 @@ fn random_games_run_without_errors_and_replay_identically() {
         play_randomly(&mut e, &mut Lcg(seed), 4_000);
         if let Some(winners) = e.winners() {
             finished += 1;
-            let rules = ResArcanaRules::new();
+            let rules = ResArcanaRules::new().with_random_start(false);
             println!(
                 "{players} players, seed {seed}: round {}, {} actions, winners {winners:?}, \
                  scores {:?}",
@@ -384,8 +389,13 @@ fn random_games_run_without_errors_and_replay_identically() {
                 "winners have 10 VP"
             );
         }
-        let replayed =
-            Engine::replay(ResArcanaRules::new(), players, seed, e.log()).expect("replays");
+        let replayed = Engine::replay(
+            ResArcanaRules::new().with_random_start(false),
+            players,
+            seed,
+            e.log(),
+        )
+        .expect("replays");
         assert_eq!(
             replayed.state(),
             e.state(),
@@ -399,7 +409,7 @@ fn random_games_run_without_errors_and_replay_identically() {
 fn nothing_in_the_log_depends_on_cards_the_compiler_dropped() {
     // The box only contains cards the compiler could express; the rules and the
     // table must agree.
-    let rules = ResArcanaRules::new();
+    let rules = ResArcanaRules::new().with_random_start(false);
     let e = started(2, 11);
     for entity in e.state().entities() {
         assert!(
@@ -408,4 +418,32 @@ fn nothing_in_the_log_depends_on_cards_the_compiler_dropped() {
             entity.def
         );
     }
+}
+
+#[test]
+fn the_first_player_is_rolled_by_dice_and_everybody_can_start() {
+    use gamelib::id::PlayerId;
+    let mut starters = std::collections::BTreeSet::new();
+    for seed in 0..60 {
+        let rolls = ResArcanaRules::opening(3, seed);
+        let engine = Engine::new(ResArcanaRules::new(), 3, seed).expect("the game sets up");
+        let order = engine.state().flow.turn_order.order();
+        assert_eq!(order[0], rolls.first, "the highest roll starts");
+        // Seats keep their places around the table.
+        assert_eq!(order[1].0, (rolls.first.0 + 1) % 3);
+        let last = rolls.rounds.last().unwrap();
+        let best = last.iter().map(|(_, v)| *v).max().unwrap();
+        assert_eq!(
+            last.iter().filter(|(_, v)| *v == best).count(),
+            1,
+            "no tie is left"
+        );
+        assert!(rolls.rounds.iter().flatten().all(|(_, v)| (1..=6).contains(v)));
+        assert_eq!(
+            rolls.seat_order(&[PlayerId(0), PlayerId(1), PlayerId(2)])[0],
+            rolls.first
+        );
+        starters.insert(rolls.first.0);
+    }
+    assert_eq!(starters.len(), 3, "every seat starts sometimes");
 }

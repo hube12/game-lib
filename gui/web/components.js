@@ -1,6 +1,6 @@
 // Game-agnostic building blocks: resources, cards, zones, decisions, the log
 // and the scoreboard. A game page composes them; nothing here names a game.
-import { h } from './dom.js';
+import { h, clear } from './dom.js';
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -574,4 +574,109 @@ export function scoreboard(model, snapshot) {
       ),
     ),
   );
+}
+
+// ---- Dice: who starts ----
+
+// Which pips each face shows, as cells of a 3x3 grid (0..8, row by row).
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+// The turn (x, y in degrees) that brings each face to the front.
+const FACE_TURN = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, 180] };
+// Where each face sits on the cube (the opposite faces add up to 7).
+const FACE_PLACE = { 1: '', 2: 'rotateY(90deg)', 3: 'rotateX(90deg)', 4: 'rotateX(-90deg)', 5: 'rotateY(-90deg)', 6: 'rotateY(180deg)' };
+
+function dieFace(value) {
+  const cells = PIPS[value];
+  return h(
+    'div',
+    { class: 'die-face', style: { transform: `${FACE_PLACE[value]} translateZ(var(--die-half))` } },
+    Array.from({ length: 9 }, (_, i) => h('span', { class: cells.includes(i) ? 'pip' : 'pip off' })),
+  );
+}
+
+function dieCube() {
+  return h('div', { class: 'die-cube' }, [1, 2, 3, 4, 5, 6].map(dieFace));
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Plays the dice that decided who starts: every contender throws a die, the
+ * highest roll wins, and tied players throw again. `opening` is the snapshot's
+ * `opening`, `names` maps a seat to its name. Resolves when it is over (or
+ * the viewer skipped it).
+ */
+export async function playOpening(opening, names) {
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const speed = reduced ? 0.25 : 1;
+  let skipped = false;
+  const title = h('h3', { class: 'dice-title' }, 'Rolling for the first player…');
+  const tray = h('div', { class: 'dice-tray' });
+  const note = h('p', { class: 'dice-note' }, ' ');
+  const skip = h('button', { class: 'dice-skip', onclick: () => { skipped = true; } }, 'Skip');
+  const overlay = h('div', { class: 'modal dice-overlay', role: 'status' }, h('div', { class: 'modal-box dice-box' }, title, tray, note, skip));
+  document.body.append(overlay);
+  const wait = async (ms) => {
+    const end = Date.now() + ms * speed;
+    while (!skipped && Date.now() < end) await sleep(40);
+  };
+  try {
+    for (const [index, round] of opening.rounds.entries()) {
+      if (skipped) break;
+      clear(tray);
+      title.textContent = index === 0 ? 'Rolling for the first player…' : 'A tie! Rolling again…';
+      note.textContent = ' ';
+      const slots = round.map((roll) => {
+        const cube = dieCube();
+        const label = h('div', { class: 'die-name' }, names.get(roll.player) ?? `Player ${roll.player + 1}`);
+        const slot = h('div', { class: 'die-slot' }, h('div', { class: 'die-scene' }, cube), label);
+        tray.append(slot);
+        return { roll, cube, slot };
+      });
+      // Every die is thrown from above with a tumble, one after the other.
+      const flights = slots.map(({ roll, cube, slot }, i) => {
+        const [x, y] = FACE_TURN[roll.value];
+        const spin = 540 + 180 * (i % 2);
+        const rest = `rotateX(${x}deg) rotateY(${y}deg) rotateZ(0deg)`;
+        cube.style.transform = rest;
+        const duration = (1300 + i * 260) * speed;
+        const fall = slot.querySelector('.die-scene').animate(
+          [
+            { transform: 'translateY(-220px) scale(1.25)', opacity: 0, offset: 0 },
+            { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.55, easing: 'ease-in' },
+            { transform: 'translateY(-46px) scale(1)', offset: 0.75, easing: 'ease-out' },
+            { transform: 'translateY(0) scale(1)', offset: 0.9, easing: 'ease-in' },
+            { transform: 'translateY(-10px) scale(1)', offset: 0.96, easing: 'ease-out' },
+            { transform: 'translateY(0) scale(1)', offset: 1 },
+          ],
+          { duration, easing: 'linear', fill: 'both', delay: i * 120 * speed },
+        );
+        const tumble = cube.animate(
+          [{ transform: `rotateX(${x + 720}deg) rotateY(${y - spin}deg) rotateZ(${360 + 90 * i}deg)` }, { transform: rest }],
+          { duration, easing: 'cubic-bezier(.15,.6,.3,1)', fill: 'both', delay: i * 120 * speed },
+        );
+        return Promise.all([fall.finished, tumble.finished]).catch(() => {});
+      });
+      await Promise.race([Promise.all(flights), (async () => { while (!skipped) await sleep(40); })()]);
+      if (skipped) {
+        // Show where the dice landed without the flight.
+        for (const { slot, cube } of slots) {
+          for (const a of [...slot.querySelector('.die-scene').getAnimations(), ...cube.getAnimations()]) a.finish();
+        }
+      }
+      const best = Math.max(...round.map((r) => r.value));
+      const leaders = slots.filter((s) => s.roll.value === best);
+      for (const s of slots) s.slot.classList.add(s.roll.value === best ? 'top' : 'out');
+      if (index === opening.rounds.length - 1) {
+        const winner = names.get(opening.first) ?? `Player ${opening.first + 1}`;
+        title.textContent = `${winner} starts!`;
+        note.textContent = `${winner} rolled the highest (${best}).`;
+      } else {
+        note.textContent = `${leaders.map((s) => names.get(s.roll.player)).join(' and ')} tie with ${best}.`;
+      }
+      await wait(index === opening.rounds.length - 1 ? 2000 : 1500);
+    }
+  } finally {
+    overlay.remove();
+  }
 }

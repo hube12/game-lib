@@ -59,7 +59,8 @@ fn a_person_plays_through_the_backend_while_bots_answer() {
     for players in [2, 3, 4] {
         let (mut b, mut s) = start(players, u64::from(players));
         assert_eq!(s.board.players.len(), usize::from(players));
-        assert!(s.board.players[0].human && !s.board.players[1].human);
+        assert!(s.board.players.iter().any(|p| p.id == 0 && p.human));
+        assert!(s.board.players.iter().any(|p| p.id == 1 && !p.human));
         let mut last = s.revision;
         for _ in 0..400 {
             if s.winners.is_some() {

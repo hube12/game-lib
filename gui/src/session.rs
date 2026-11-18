@@ -42,6 +42,12 @@ pub trait GameUi: Clone + Send + 'static {
     /// An opponent for a bot seat.
     fn bot(&self, player: PlayerId, seed: u64) -> Box<dyn Bot + Send>;
 
+    /// The dice rolled before the game to decide who starts, for the page to
+    /// play back, if the game rolls any. `seed` is the game's seed.
+    fn opening(&self, _players: u8, _seed: u64) -> Option<Opening> {
+        None
+    }
+
     /// The scoreboard right now.
     fn scores(&self, _state: &GameState) -> Vec<ScoreLine> {
         Vec::new()
@@ -57,6 +63,25 @@ pub trait GameUi: Clone + Send + 'static {
     ) -> Option<String> {
         None
     }
+}
+
+/// One die rolled for a seat.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DieRoll {
+    /// The seat that rolled.
+    pub player: u8,
+    /// The face that came up.
+    pub value:  u8,
+}
+
+/// The dice that decided who starts, for the page to play back.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Opening {
+    /// Each round of rolling; after the first only the seats tied for the
+    /// highest roll roll again.
+    pub rounds: Vec<Vec<DieRoll>>,
+    /// The seat that starts.
+    pub first:  u8,
 }
 
 /// Settings for a new game.
@@ -184,6 +209,9 @@ pub struct Snapshot {
     pub acting:   Vec<u8>,
     /// Recent events, oldest first.
     pub log:      Vec<LogLine>,
+    /// The dice that decided who starts, if the game rolled any.
+    #[serde(default)]
+    pub opening:  Option<Opening>,
     /// The scoreboard.
     pub scores:   Vec<ScoreLine>,
     /// The winners once the game is over.
@@ -271,6 +299,7 @@ pub struct Session<G: GameUi> {
     bots:     BTreeMap<PlayerId, Box<dyn Bot + Send>>,
     names:    Names,
     revision: u64,
+    opening: Option<Opening>,
     recorder: Option<Recorder>,
     plan:     Option<Plan<G::Rules>>,
     notice:   Option<String>,
@@ -328,6 +357,7 @@ impl<G: GameUi> Session<G> {
                 )
             })
             .collect();
+        let ui_opening = ui.opening(game.players, seed);
         let mut session = Self {
             ui,
             engine,
@@ -335,6 +365,7 @@ impl<G: GameUi> Session<G> {
             bots,
             names: Names::new(description),
             revision: 0,
+            opening: ui_opening,
             recorder: log_dir.and_then(|dir| Recorder::create(dir, seed).ok()),
             plan: None,
             notice: None,
@@ -1160,6 +1191,7 @@ impl<G: GameUi> Session<G> {
             actions,
             acting,
             log,
+            opening: self.opening.clone(),
             scores: self.ui.scores(state),
             winners: self.shown().winners().map(|w| w.iter().map(|p| p.0).collect()),
             plan: self.plan.as_ref().map(|plan| PlanView {

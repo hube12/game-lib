@@ -90,12 +90,65 @@ pub const HAND_SIZE: u32 = 3;
 /// The five essences.
 pub const ESSENCES: [gamelib::id::ResourceId; 5] = [ELAN, LIFE, CALM, DEATH, GOLD];
 
+/// How the first player was found: everybody rolls a die, the highest roll
+/// starts, and players tied for the highest roll roll again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpeningRolls {
+    /// Each round of rolling, in seat order. After the first round only the
+    /// players tied for the highest roll take part.
+    pub rounds: Vec<Vec<(PlayerId, u8)>>,
+    /// The winner, who sits first in turn order.
+    pub first:  PlayerId,
+}
+
+impl OpeningRolls {
+    /// Rolls a six-sided die for every player until one rolls highest.
+    ///
+    /// # Panics
+    /// When there are no players.
+    pub fn roll(players: &[PlayerId], rng: &mut Rng) -> Self {
+        assert!(!players.is_empty(), "nobody to roll");
+        let mut contenders = players.to_vec();
+        let mut rounds = Vec::new();
+        loop {
+            let round: Vec<(PlayerId, u8)> = contenders
+                .iter()
+                .map(|p| {
+                    (
+                        *p,
+                        u8::try_from(1 + rng.below(6)).expect("a die face fits in u8"),
+                    )
+                })
+                .collect();
+            let best = round.iter().map(|(_, v)| *v).max().unwrap_or(0);
+            contenders = round.iter().filter(|(_, v)| *v == best).map(|(p, _)| *p).collect();
+            rounds.push(round);
+            if contenders.len() == 1 {
+                return Self {
+                    rounds,
+                    first: contenders[0],
+                };
+            }
+        }
+    }
+
+    /// The same table with the winner first: the seats keep their order
+    /// around the table.
+    pub fn seat_order(&self, players: &[PlayerId]) -> Vec<PlayerId> {
+        let at = players.iter().position(|p| *p == self.first).unwrap_or(0);
+        let mut order = players.to_vec();
+        order.rotate_left(at);
+        order
+    }
+}
+
 /// The rules of Res Arcana (base game).
 #[derive(Clone, Debug)]
 pub struct ResArcanaRules {
-    specs:    Vec<CardSpec>,
-    compiled: Compiled,
-    draft:    bool,
+    specs:        Vec<CardSpec>,
+    compiled:     Compiled,
+    draft:        bool,
+    random_start: bool,
 }
 
 impl ResArcanaRules {
@@ -116,6 +169,7 @@ impl ResArcanaRules {
             specs,
             compiled,
             draft: false,
+            random_start: true,
         }
     }
 
@@ -129,6 +183,21 @@ impl ResArcanaRules {
     pub const fn with_draft(mut self, draft: bool) -> Self {
         self.draft = draft;
         self
+    }
+
+    /// Whether who starts is decided by a dice roll (the default) or seat 0
+    /// always starts, which is what tests that script a game want.
+    #[must_use]
+    pub const fn with_random_start(mut self, random_start: bool) -> Self {
+        self.random_start = random_start;
+        self
+    }
+
+    /// The dice that decide who starts a game with this seed and these
+    /// players (seats `0..players`), exactly as the game itself rolled them.
+    pub fn opening(players: u8, seed: u64) -> OpeningRolls {
+        let seats: Vec<PlayerId> = (0..players).map(PlayerId).collect();
+        OpeningRolls::roll(&seats, &mut Rng::from_seed(seed))
     }
 
     /// Whether the draft variant is on.
@@ -630,7 +699,15 @@ impl ResArcanaRules {
 }
 
 impl GameRules for ResArcanaRules {
-    fn setup(&self, players: &[PlayerId], rng: Rng) -> GameState {
+    fn setup(&self, players: &[PlayerId], mut rng: Rng) -> GameState {
+        // Who starts is rolled first, so it only depends on the seed (the
+        // GUI replays it as dice): see [`ResArcanaRules::opening`].
+        let order = if self.random_start {
+            OpeningRolls::roll(players, &mut rng).seat_order(players)
+        } else {
+            players.to_vec()
+        };
+        let players = &order[..];
         let mut s = GameState::new(rng);
         for res in ESSENCES {
             s.bank.set_infinite(res);

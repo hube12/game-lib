@@ -16,7 +16,12 @@ use gamelib_res_arcana::{
 type Game = Engine<ResArcanaRules>;
 
 fn drafted(players: u8, seed: u64) -> Game {
-    Engine::new(ResArcanaRules::new().with_draft(true), players, seed).expect("the game sets up")
+    Engine::new(
+        ResArcanaRules::new().with_random_start(false).with_draft(true),
+        players,
+        seed,
+    )
+    .expect("the game sets up")
 }
 
 fn cards(e: &Game, p: PlayerId, kind: ZoneKind) -> Vec<EntityId> {
@@ -39,8 +44,8 @@ fn everybody_picks(e: &mut Game, pick: impl Fn(usize, usize) -> usize) {
 
 #[test]
 fn the_variant_is_off_by_default() {
-    let e = Engine::new(ResArcanaRules::new(), 2, 1).unwrap();
-    assert!(!ResArcanaRules::new().draft());
+    let e = Engine::new(ResArcanaRules::new().with_random_start(false), 2, 1).unwrap();
+    assert!(!ResArcanaRules::new().with_random_start(false).draft());
     assert!(e.state().zone_id(&Owner::Player(PlayerId(0)), DRAFT).is_err());
     assert_eq!(
         cards(&e, PlayerId(0), HAND).len(),
@@ -155,7 +160,7 @@ fn everybody_ends_with_eight_different_artifacts_and_three_in_hand() {
 
 #[test]
 fn a_drafted_game_replays_identically() {
-    let rules = ResArcanaRules::new().with_draft(true);
+    let rules = ResArcanaRules::new().with_random_start(false).with_draft(true);
     let mut e = Engine::new(rules.clone(), 2, 5).unwrap();
     for _ in 0..40 {
         let Some(pending) = e.pending() else { break };
