@@ -87,6 +87,18 @@ pub struct Params {
     pub attack:       f64,
     /// Extra for a move that hurts the rivals, so it is made before they pass.
     pub attack_first: f64,
+    /// Share of an attack counted in what a ready card still promises. An
+    /// attack on every rival is estimated as the sum over rivals but the
+    /// position averages them, so counting all of it made a ready Dragon look
+    /// worth more unused than used.
+    pub attack_ready: f64,
+    /// Draft: share of a card's income over the whole game that counts.
+    pub draft_time:   f64,
+    /// Draft: share of a card's price that counts against it.
+    pub draft_cost:   f64,
+    /// Draft: share of a card's points that counts, at the point worth of a
+    /// whole game.
+    pub draft_vp:     f64,
     /// A move must improve the position by this much, otherwise the bot passes.
     pub min_gain:     f64,
     /// How much a rival's position counts against the bot's own.
@@ -122,6 +134,10 @@ impl Default for Params {
             ready:        0.5,
             attack:       1.0,
             attack_first: 0.4,
+            attack_ready: 0.25,
+            draft_time:   0.5,
+            draft_cost:   0.5,
+            draft_vp:     0.5,
             min_gain:     0.05,
             rival:        1.0,
             dragon:       1.0,
@@ -150,6 +166,10 @@ impl Params {
             "ready" => &mut self.ready,
             "attack" => &mut self.attack,
             "attack_first" => &mut self.attack_first,
+            "attack_ready" => &mut self.attack_ready,
+            "draft_time" => &mut self.draft_time,
+            "draft_cost" => &mut self.draft_cost,
+            "draft_vp" => &mut self.draft_vp,
             "min_gain" => &mut self.min_gain,
             "rival" => &mut self.rival,
             "dragon" => &mut self.dragon,
@@ -670,11 +690,16 @@ impl Eval {
         let can_pay =
             |power: &Power| power.needs.as_ref().is_none_or(|t| own_tags.iter().any(|o| o == t));
         let mut best_turn = 0.0_f64;
+        let mut best_turn_ready = 0.0_f64;
         let mut best_turn_essences = 0.0_f64;
         let mut repeat = 0.0_f64;
         for power in &model.powers {
             let worth = self.power_worth(power, frame, rivals, can_pay(power));
             if power.turn {
+                let ready = worth
+                    - power.gain.attack * rivals * p.attack * (1.0 - p.attack_ready)
+                        * f64::from(u8::from(worth > 0.0));
+                best_turn_ready = best_turn_ready.max(ready);
                 if worth > best_turn {
                     best_turn = worth;
                     best_turn_essences = (power.gain.units - power.cost).max(0.0);
@@ -692,7 +717,7 @@ impl Eval {
                 all += f64::from(*n) * p.essence;
             }
         }
-        (all, essences + best_turn_essences, best_turn)
+        (all, essences + best_turn_essences, best_turn_ready)
     }
 
     /// How many essences are missing to pay a price from a pool, after a
@@ -1220,8 +1245,22 @@ impl PlannerBot {
                 zone.get(index).and_then(|e| self.eval.model_of_entity(state, *e)).map_or(
                     0.0,
                     |m| {
-                        let points = if from == DRAFT { m.vp * 0.01 } else { 0.0 };
-                        self.eval.income(m, None, &frame, 1.0, false, &[]).0 + points
+                        let income = self.eval.income(m, None, &frame, 1.0, false, &[]).0;
+                        if from != DRAFT {
+                            return income;
+                        }
+                        // An artifact in the draft is worth what it makes over
+                        // the game, plus its points, less what it costs to
+                        // play; a Dragon is also worth keeping in hand.
+                        let p = &self.eval.params;
+                        let price = m.price.as_ref().map_or(0.0, |pr| {
+                            f64::from(pr.specific.iter().sum::<u32>() + pr.any)
+                        });
+                        let dragon = if m.has(tag::DRAGON) { p.dragon } else { 0.0 };
+                        income * frame.left * p.draft_time
+                            + m.vp * frame.vp_worth * p.draft_vp
+                            + dragon
+                            - price * p.essence * p.draft_cost
                     },
                 )
             });

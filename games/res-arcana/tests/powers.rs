@@ -1771,7 +1771,7 @@ fn use_statue(e: &mut Game) {
 
 #[test]
 fn the_last_to_pass_does_not_swap_the_item_when_the_game_is_already_won() {
-    let won = ["Große Pyramide", "Korallenschloss", "Orakel", "Goldene Statue"];
+    let won = ["Große Pyramide", "Korallenschloss", "Orakel", "Tempel"];
     let table = |cards: &[&str]| {
         let mut table = Table::round();
         for name in cards {

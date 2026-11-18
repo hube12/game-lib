@@ -183,3 +183,22 @@ Improvements, most important first:
    would help.
 7. **Idle resources.** Essences that cannot become points or a purchase before the game ends should be penalised so the
    bot trades them in earlier.
+
+## 10. Findings from the 4-player draft game (2026-11-18, seed 12939221)
+
+The three bots drafted and placed Dragons (Bone, Water, Fire, Earth) and never attacked with them. At every decision the
+attack scored about -1.7 against +1.5 for passing.
+
+Cause: a Dragon's attack was estimated as the sum over all rivals, but the position subtracts the *average* of the rivals,
+so a ready Dragon was worth about 3x more unused (the `ready` term) than the attack was worth once played. Using it
+always looked like a loss. The Water and Fire Dragons (escape: pay 1 Elan / 1 Calm) were hit hardest, because the rival's
+best answer is a cheap escape.
+
+Changes:
+
+- `attack_ready` (default 0.25): share of an attack that counts in the ready term. In 40 three-player self-play games
+  the bots attacked 57 times before, 70 with 0.5 and 80 with 0.25; Water and Fire Dragons now attack too (10 and 5
+  times, 0 before). Strength is unchanged: 202-200 and 201-200 over 400 paired games.
+- Draft pick: an artifact is now valued as `income x rounds left x draft_time + points x point worth x draft_vp +
+  Dragon bonus - price x draft_cost` (0.5 each), instead of income alone. In 1300 paired draft games this is level with
+  the old rule (about 50%), so it is a sanity fix, not a measured gain.
