@@ -813,7 +813,13 @@ impl GameRules for ResArcanaRules {
                 delta:   1,
             });
         }
-        effects.push(swap_item());
+        // The last player to pass would swap their item just before the
+        // victory check: pointless when somebody has already won, so it is
+        // skipped (the rulebook has it, but nothing can come of it).
+        let last = state.flow.turn_order.passed().len() == state.flow.turn_order.order().len();
+        if !(last && self.winners(state).is_some()) {
+            effects.push(swap_item());
+        }
         effects.push(Effect::Draw {
             who:  OwnerRef::Controller,
             from: DECK,

@@ -4,7 +4,7 @@ import { h, clear } from './gamelib-gui/dom.js';
 import { Model, findZone, zoneView, decisionDialog, decidedOnCards, logView, scoreboard, poolView, hidePopup, playOpening, turnOrder } from './gamelib-gui/components.js';
 
 // Zone roles, phases and counters of this game (the same ids the Rust side names).
-const ZONE = { HAND: 1, TABLEAU: 3, MONUMENT_DECK: 10, PLACES: 11, MONUMENT_ROW: 12, ITEMS: 13, CANDIDATES: 14, DRAFT: 17, DECK: 0 };
+const ZONE = { HAND: 1, TABLEAU: 3, MONUMENT_DECK: 10, PLACES: 11, MONUMENT_ROW: 12, ITEMS: 13, CANDIDATES: 14, DRAFT: 17, DECK: 0, DISCARD: 2 };
 const COUNTER = { FIRST_TOKEN: 2 };
 
 const app = document.getElementById('app');
@@ -214,7 +214,29 @@ function looseActions(actions, board) {
   return actions.filter((a) => a.kind !== 'decide' && (a.entity == null ? true : !visible.has(a.entity)));
 }
 
-function opponent(player, board) {
+// Which discard piles the viewer opened (by seat); kept across redraws.
+const openDiscards = new Set();
+
+/** A player's discard pile, face up: anyone can open it at any time. */
+function discardPile(player, board, actions, onAct) {
+  const zone = findZone(board, ZONE.DISCARD, player.id);
+  if (!zone) return null;
+  const ids = new Set(zone.cards.map((c) => c.id));
+  const usable = actions.some((a) => a.entity != null && ids.has(a.entity));
+  return h(
+    'details',
+    {
+      class: 'discard-pile',
+      'data-seat': player.id,
+      open: usable || openDiscards.has(player.id),
+      ontoggle: (e) => (e.target.open ? openDiscards.add(player.id) : openDiscards.delete(player.id)),
+    },
+    h('summary', null, `Discard pile (${zone.count})`),
+    zone.cards.length ? zoneView(model, zone, actions, onAct, { title: `${player.name}'s discard`, compact: true }) : h('p', { class: 'muted' }, 'Empty.'),
+  );
+}
+
+function opponent(player, board, actions, onAct) {
   const tableau = findZone(board, ZONE.TABLEAU, player.id);
   const hand = findZone(board, ZONE.HAND, player.id);
   const deck = findZone(board, ZONE.DECK, player.id);
@@ -230,6 +252,7 @@ function opponent(player, board) {
       h('span', { class: 'counts' }, `hand ${hand?.count ?? 0} · deck ${deck?.count ?? 0}${token ? ' · first player token' : ''}${player.passed ? ' · passed' : ''}`),
     ),
     tableau ? zoneView(model, tableau, [], () => {}, { title: 'In play', compact: true }) : null,
+    discardPile(player, board, actions, onAct),
   );
 }
 
@@ -254,6 +277,7 @@ function mine(me, board, actions, onAct) {
     candidates?.cards.length ? zoneView(model, candidates, actions, onAct, { title: 'Mages to choose from' }) : null,
     tableau ? zoneView(model, tableau, actions, onAct, { title: 'In play' }) : null,
     hand ? zoneView(model, hand, actions, onAct, { title: 'Hand' }) : null,
+    discardPile(me, board, actions, onAct),
   );
 }
 
@@ -340,7 +364,7 @@ function render() {
         // Your area first, so it stays put when the bots' panels change size.
         me ? mine(me, board, cardActions, act) : null,
         middle(board, cardActions, act),
-        board.players.filter((p) => p.id !== board.viewer).map((p) => opponent(p, board)),
+        board.players.filter((p) => p.id !== board.viewer).map((p) => opponent(p, board, cardActions, act)),
       ),
       h('aside', { class: 'side' }, snapshot.plan ? planPanel(snapshot.plan) : null, h('section', { class: 'panel' }, h('h3', null, 'Score'), scoreboard(model, snapshot)), h('section', { class: 'panel' }, h('h3', null, 'Turn order'), turnOrder(snapshot)), h('section', { class: 'panel' }, h('h3', null, 'Log'), logView(model, snapshot.log))),
     ),

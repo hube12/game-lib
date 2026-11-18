@@ -1770,6 +1770,27 @@ fn use_statue(e: &mut Game) {
 }
 
 #[test]
+fn the_last_to_pass_does_not_swap_the_item_when_the_game_is_already_won() {
+    let won = ["Große Pyramide", "Korallenschloss", "Orakel", "Goldene Statue"];
+    let table = |cards: &[&str]| {
+        let mut table = Table::round();
+        for name in cards {
+            table = table.card(P1, name);
+        }
+        table.start()
+    };
+    let mut e = table(&won);
+    pass(&mut e, P0);
+    e.apply(P1, Action::Pass).expect("passing is possible");
+    assert!(!picks_an_item(&e), "10 points are there: no item to swap");
+    // With fewer points the swap still happens.
+    let mut e = table(&won[..2]);
+    pass(&mut e, P0);
+    e.apply(P1, Action::Pass).expect("passing is possible");
+    assert!(picks_an_item(&e));
+}
+
+#[test]
 fn golden_statue_turns_with_three_gold_for_three_temporary_points() {
     let all = ["Große Pyramide", "Orakel", "Tempel", "Goldene Statue"];
     let mut e = statue_at_the_victory_check(&all, 3);
