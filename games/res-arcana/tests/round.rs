@@ -447,3 +447,25 @@ fn the_first_player_is_rolled_by_dice_and_everybody_can_start() {
     }
     assert_eq!(starters.len(), 3, "every seat starts sometimes");
 }
+
+#[test]
+fn magic_items_are_picked_counterclockwise_starting_right_of_the_first_player() {
+    for seed in 0..12 {
+        let mut e = Engine::new(ResArcanaRules::new(), 4, seed).expect("the game sets up");
+        let order = e.state().flow.turn_order.order().to_vec();
+        let mut picks = Vec::new();
+        while let Some(pending) = e.pending() {
+            let who =
+                *pending.players.iter().find(|p| pending.waiting_for(**p)).expect("someone waits");
+            if pending.players.len() == 1 {
+                picks.push(who);
+            }
+            let first = e.legal_actions(who).remove(0);
+            e.apply(who, first).expect("a legal option");
+        }
+        let mut expected = order.clone();
+        expected.reverse();
+        picks.truncate(expected.len());
+        assert_eq!(picks, expected, "seed {seed}: the last in turn order picks first");
+    }
+}

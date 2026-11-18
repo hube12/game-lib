@@ -758,8 +758,10 @@ impl GameRules for ResArcanaRules {
                 bound:   Bound::default(),
             });
         }
-        // Then the magic items are picked in reverse turn order. The stack
-        // resolves its top first, so the first player's pick is pushed first.
+        // Then the magic items are picked counterclockwise, starting with the
+        // player to the right of the first player: reverse turn order. The
+        // stack resolves its top first, so the first player's pick is pushed
+        // first.
         for &p in players {
             s.stack.push(Task::Effect {
                 effect: take_item(),
