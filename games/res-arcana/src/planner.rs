@@ -129,6 +129,20 @@ pub struct Params {
     /// Draft: units a mage is worth for each essence it collects of the kind
     /// a place of power on the table is made of.
     pub place_pull:   f64,
+    /// Share of a player's victory points per round from its scoring cards
+    /// (a Catacombs collecting Death) that counts as its pace, when that is
+    /// faster than `pace`. 0 keeps the fixed pace.
+    pub rate:         f64,
+    /// Essences in the pool lose up to this share of their worth as the game
+    /// runs out (they cannot all become points any more). 0 turns it off.
+    pub idle:         f64,
+    /// Units a pass is worth to a player who holds the first player token and
+    /// whose rival has not passed: passing first keeps it, acting lets the
+    /// rival take it.
+    pub token_hold:   f64,
+    /// Share added to the profit of a monument (a price made of Gold), which
+    /// the planning term otherwise reaches too slowly.
+    pub gold_goal:    f64,
 }
 
 impl Default for Params {
@@ -161,6 +175,10 @@ impl Default for Params {
             race_floor:   0.2,
             other_kind:   0.35,
             place_pull:   3.0,
+            rate:         1.0,
+            idle:         0.4,
+            token_hold:   1.0,
+            gold_goal:    0.0,
         }
     }
 }
@@ -197,6 +215,10 @@ impl Params {
             "race_floor" => &mut self.race_floor,
             "other_kind" => &mut self.other_kind,
             "place_pull" => &mut self.place_pull,
+            "rate" => &mut self.rate,
+            "idle" => &mut self.idle,
+            "token_hold" => &mut self.token_hold,
+            "gold_goal" => &mut self.gold_goal,
             _ => return false,
         };
         *field = value;
@@ -901,8 +923,10 @@ impl Eval {
         total += token as f64 * (0.4 + frame.vp_worth * (1.0 - frame.left * 0.6).clamp(0.0, 1.0));
 
         // Essences in the pool; a little Life is a shield against attacks.
+        // Near the end not every essence can still become points.
+        let idle = 1.0 - p.idle * (1.0 - (frame.left / 2.0).clamp(0.0, 1.0));
         for (i, n) in pool.iter().enumerate() {
-            total += f64::from(*n) * self.worth(ResourceId(i as u16));
+            total += f64::from(*n) * self.worth(ResourceId(i as u16)) * idle;
         }
         if threatened && !state.flow.turn_order.has_passed(player) {
             total += f64::from(pool[index(LIFE).unwrap_or(1)].min(2)) * 0.6;
@@ -1024,6 +1048,9 @@ impl Eval {
                 - paid.max(0.0);
             if model.check_react {
                 profit += frame.vp_worth;
+            }
+            if price.specific[4] >= 3 {
+                profit *= 1.0 + p.gold_goal;
             }
             if from_hand {
                 profit -= p.hand_card;
@@ -1174,18 +1201,44 @@ impl Eval {
         })
     }
 
+    /// Victory points a player's scoring cards make each round: essences
+    /// collected onto a card that counts them, and its free powers.
+    fn vp_rate(&self, state: &GameState, player: PlayerId) -> f64 {
+        let mut total = 0.0;
+        for &id in Self::zone(state, &Owner::Player(player), TABLEAU) {
+            let Some(model) = self.model_of_entity(state, id) else {
+                continue;
+            };
+            if let Some((each, res)) = model.per_essence {
+                total += each * model.kinds[res.0 as usize];
+            }
+            total += model
+                .powers
+                .iter()
+                .filter(|pw| pw.cost == 0.0 && !pw.one_shot && pw.needs.is_none())
+                .map(|pw| pw.gain.vp)
+                .fold(0.0, f64::max);
+        }
+        total
+    }
+
     /// The frame for choices made in this state.
     fn frame(&self, state: &GameState) -> Frame {
         let p = &self.params;
-        // How far the leader is, counting what a player can buy right now.
-        let lead = state
+        // Rounds each player needs to reach the winning score, counting what
+        // it can buy right now and how fast its scoring cards make points.
+        let left = state
             .flow
             .turn_order
             .order()
             .iter()
-            .map(|q| self.score(state, *q) as f64 + p.reach * self.imminent(state, *q))
-            .fold(0.0, f64::max);
-        let left = ((WIN_SCORE as f64 - lead) / p.pace).clamp(0.4, p.horizon);
+            .map(|q| {
+                let at = self.score(state, *q) as f64 + p.reach * self.imminent(state, *q);
+                let pace = p.pace.max(p.rate * self.vp_rate(state, *q));
+                (WIN_SCORE as f64 - at) / pace
+            })
+            .fold(f64::INFINITY, f64::min)
+            .clamp(0.4, p.horizon);
         Frame {
             round: state.flow.round,
             left,
@@ -1593,6 +1646,20 @@ impl Bot for PlannerBot {
                 }
             }
             scored.push((gain, i));
+        }
+        let pass = legal.iter().position(|a| *a == Action::Pass);
+        if !deciding && let Some(at) = pass {
+            // Holding the token: passing first keeps it from the rivals.
+            let turn = &base.flow.turn_order;
+            let holds = base.counter(FIRST_TOKEN, &Owner::Player(me)).is_some_and(|c| c.value > 0);
+            let rival_acting = turn.order().iter().any(|q| *q != me && !turn.has_passed(*q));
+            if holds && rival_acting {
+                for entry in &mut scored {
+                    if entry.1 == at {
+                        entry.0 += self.eval.params.token_hold;
+                    }
+                }
+            }
         }
         scored.sort_by(|a, b| b.0.total_cmp(&a.0));
 

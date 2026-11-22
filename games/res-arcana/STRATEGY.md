@@ -236,3 +236,45 @@ about contested play, which self-play seldom produces, so it is not expected to 
 
 Not solved: the bot still cannot stop a player who is simply ahead in the draft. The remaining weakness is idle essences
 after a lost race (section 9.7) and converting them into points faster than 2.5 VP a round.
+
+## 12. Findings from the replayed Catacombs game (2026-11-22, seed 100000, human won 10-4 in round 4)
+
+Same seed and same human line as section 11, played after the `race_lag` / `place_pull` / `other_kind` changes. The bot
+drafted the same Duelist and Death / Life, so those changes did not alter the draft. Result: 10-4 again (8-1 at the
+start of round 4 before, 8-2 now).
+
+The game was decided in the draft. The bot acts first in round 1 but could reach at most about 8 of the 9 Death needed
+for the Catacombs, even by discarding its whole hand. Dragon attacks were no use: the Catacombs scores from Death on the
+card, and the human kept almost nothing in its pool.
+
+Play weaknesses seen (none of them would have changed the result):
+
+1. **Low conversion rate.** Cursed Forge cost 9 essences for 1 VP and was never used (every collect step the bot chose
+   "turn this card" over paying 1 Death). Sacred Grove cost 12 essences for 2 VP. No Gold was saved for a monument
+   (Hanging Gardens, Colossus): Cornucopia was always used for 3 essences, never for 1 Gold (still item 9.4). The bot
+   ended with 10 idle essences and 3 Death on Cursed Skull (item 9.7).
+2. **Pass timing (item 9.2).** In round 2 the bot held the first-player token and spent two more actions on a Magical
+   Shard (+1.09 for passing against +0.62 for the Shard, then +1 Calm). The human passed first and took the token. It
+   only counts at the victory check, so no points were lost, but it decides who acts first next round. `planner.rs`
+   values the token at about 0.4 units mid-game.
+3. **Pace (item 9.1).** `rounds left` is fixed at `(10 - best) / 2.2`. The bot showed 3.6 rounds left at the start of
+   round 2; the game ended in round 4. The human's real pace was 2.5-3 VP a round.
+
+Next steps, in order: derive pace from the rival's scoring card and pool; penalise idle essences near the end; a Gold
+bonus when a monument is in reach; value passing first while holding the token. Expected effect: the bot scores about
+6-7 instead of 4 in this game, but still loses the race.
+
+Implemented (all in `Params`, 400 paired 2-player self-play games each, full defaults against the same bot with one
+number switched off):
+
+- `rate` (1.0): a player's pace is the larger of `pace` and the points its scoring cards make per round (`vp_rate`:
+  essences collected onto a card that counts them, plus its free powers). A Catacombs with Death collect counts 2 a
+  round. Switched off: 200-200.
+- `idle` (0.4): pool essences lose up to this share of their worth as `left` falls below 2 rounds. Switched off: 201-199.
+- `token_hold` (1.0): a pass is worth this much more to a player who holds the first player token while a rival has not
+  passed. Switched off: 200-200.
+- `gold_goal` (0, off): profit multiplier for monuments. At 0.3 it was 195-205 (noise, slightly worse), so it stays
+  off until a human game shows it matters.
+
+All differences are within noise (about +-25), as expected: the changes concern contested play against a person, which
+self-play seldom produces. Not yet checked against the logged game; the next human game is the real test.
