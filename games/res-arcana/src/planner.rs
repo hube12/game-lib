@@ -116,6 +116,19 @@ pub struct Params {
     /// Victory points counted against a position in which a rival with a
     /// ready victory check can end the game ahead of the bot.
     pub check_threat: f64,
+    /// A place of power or monument that a rival will afford sooner is worth
+    /// less to the player behind: this much less per round of lag. 0 turns
+    /// the race off (every player counts every card as his own).
+    pub race_lag:     f64,
+    /// The least share of such a card's profit that is still counted by the
+    /// player who is behind in the race.
+    pub race_floor:   f64,
+    /// Share of an income in another kind of essence that counts towards a
+    /// price made mostly of one kind (it needs swapping first).
+    pub other_kind:   f64,
+    /// Draft: units a mage is worth for each essence it collects of the kind
+    /// a place of power on the table is made of.
+    pub place_pull:   f64,
 }
 
 impl Default for Params {
@@ -144,6 +157,10 @@ impl Default for Params {
             reach:        0.7,
             tempo:        1.0,
             check_threat: 3.0,
+            race_lag:     0.5,
+            race_floor:   0.2,
+            other_kind:   0.35,
+            place_pull:   3.0,
         }
     }
 }
@@ -176,6 +193,10 @@ impl Params {
             "reach" => &mut self.reach,
             "tempo" => &mut self.tempo,
             "check_threat" => &mut self.check_threat,
+            "race_lag" => &mut self.race_lag,
+            "race_floor" => &mut self.race_floor,
+            "other_kind" => &mut self.other_kind,
+            "place_pull" => &mut self.place_pull,
             _ => return false,
         };
         *field = value;
@@ -379,6 +400,12 @@ struct Model {
     collect_if:  Option<(ResourceId, f64)>,
     /// Grows by this many per kind of essence lying on it.
     grow:        f64,
+    /// Essences of a fixed kind collected every round, by kind.
+    kinds:       [f64; 5],
+    /// Essences collected every round of a kind the player picks.
+    choice:      [f64; 5],
+    /// Essences collected every round of a kind the player picks freely.
+    any:         f64,
     powers:      Vec<Power>,
     /// Has a reaction against Life loss.
     defense:     bool,
@@ -471,6 +498,44 @@ fn gain_of(effect: &Effect, per_essence: Option<(f64, ResourceId)>) -> Gain {
     g
 }
 
+/// What a collect ability gives the player, by kind of essence: fixed kinds
+/// into `kinds`, a pick among some kinds into `choice` (the most each kind can
+/// give), a free pick into `any`.
+fn collect_kinds(effect: &Effect, kinds: &mut [f64; 5], choice: &mut [f64; 5], any: &mut f64) {
+    match effect {
+        Effect::Gain {
+            to: Target::Controller,
+            res,
+            n,
+        } => {
+            if let Some(i) = index(*res) {
+                kinds[i] += f64::from(*n);
+            }
+        },
+        Effect::GainChoose {
+            to: Target::Controller,
+            n: Count::Fixed(n),
+            ..
+        } => *any += f64::from(*n),
+        Effect::Choose(options) => {
+            for option in options {
+                let (mut k, mut c, mut a) = ([0.0; 5], [0.0; 5], 0.0);
+                collect_kinds(option, &mut k, &mut c, &mut a);
+                for i in 0..5 {
+                    choice[i] = f64::max(choice[i], k[i] + c[i]);
+                }
+                *any = any.max(a);
+            }
+        },
+        Effect::Sequence(steps) => {
+            for step in steps {
+                collect_kinds(step, kinds, choice, any);
+            }
+        },
+        _ => {},
+    }
+}
+
 /// Reads a power's cost: `(essence units, turns itself, needs a card with this
 /// tag, one shot)`.
 fn cost_of(cost: Option<&Cost>, power: &mut Power) {
@@ -520,6 +585,9 @@ fn model_of(def: &CardDef, spec: &crate::CardSpec) -> Model {
         collect: 0.0,
         collect_if: None,
         grow: 0.0,
+        kinds: [0.0; 5],
+        choice: [0.0; 5],
+        any: 0.0,
         powers: Vec::new(),
         defense: false,
         check_react: false,
@@ -554,6 +622,14 @@ fn read_ability(ability: &Ability, model: &mut Model) {
                 return;
             }
             let units = gain_of(&ability.effect, model.per_essence).units.max(0.0);
+            if needs_on_card(&ability.condition).is_none() {
+                collect_kinds(
+                    &ability.effect,
+                    &mut model.kinds,
+                    &mut model.choice,
+                    &mut model.any,
+                );
+            }
             match needs_on_card(&ability.condition) {
                 Some(res) => model.collect_if = Some((res, units)),
                 None => model.collect += units,
@@ -574,6 +650,12 @@ fn read_ability(ability: &Ability, model: &mut Model) {
         Trigger::React(kind) if kind == COLLECT_STEP => {
             // Taking what lies on the card is no income.
             if !matches!(ability.effect, Effect::TakeAll { .. }) {
+                collect_kinds(
+                    &ability.effect,
+                    &mut model.kinds,
+                    &mut model.choice,
+                    &mut model.any,
+                );
                 model.collect += gain_of(&ability.effect, model.per_essence).units.max(0.0);
             }
         },
@@ -602,6 +684,20 @@ struct Goal {
     off:         u32,
     /// Whether the discounts cannot reduce Gold.
     off_no_gold: bool,
+    /// The shared card this is (a place or monument), which rivals want too.
+    shared:      Option<EntityId>,
+    /// Rounds the player needs to afford it.
+    rounds:      f64,
+}
+
+/// A player's position before the race for the shared cards is settled.
+struct Parts {
+    total:    f64,
+    goals:    Vec<Goal>,
+    pool:     [u32; 5],
+    flexible: f64,
+    /// Rounds needed to afford each place and monument on the table.
+    etas:     Vec<(EntityId, f64)>,
 }
 
 /// Scores positions.
@@ -697,7 +793,10 @@ impl Eval {
             let worth = self.power_worth(power, frame, rivals, can_pay(power));
             if power.turn {
                 let ready = worth
-                    - power.gain.attack * rivals * p.attack * (1.0 - p.attack_ready)
+                    - power.gain.attack
+                        * rivals
+                        * p.attack
+                        * (1.0 - p.attack_ready)
                         * f64::from(u8::from(worth > 0.0));
                 best_turn_ready = best_turn_ready.max(ready);
                 if worth > best_turn {
@@ -765,6 +864,13 @@ impl Eval {
     /// hand; for a rival only the number of cards is used.
     #[allow(clippy::too_many_lines)]
     fn player(&self, state: &GameState, player: PlayerId, frame: &Frame, detail: bool) -> f64 {
+        self.finish(self.parts(state, player, frame, detail), frame, &[])
+    }
+
+    /// Everything of [`Eval::player`] except the cards to get, which depend on
+    /// what the rivals can afford sooner.
+    #[allow(clippy::too_many_lines)]
+    fn parts(&self, state: &GameState, player: PlayerId, frame: &Frame, detail: bool) -> Parts {
         let p = &self.params;
         let owner = Owner::Player(player);
         let order = state.flow.turn_order.order();
@@ -809,6 +915,9 @@ impl Eval {
             .flat_map(|m| m.tags.iter().map(String::as_str))
             .collect();
         let mut essence_income = 0.0;
+        let mut kind_income = [0.0_f64; 5];
+        let mut any_income = 0.0;
+        let mut choice_income = [0.0_f64; 5];
         let mut dragon_off = 0;
         let mut artifact_off = 0;
         let mut off_no_gold = false;
@@ -828,6 +937,13 @@ impl Eval {
                 &own_tags,
             );
             essence_income += essences;
+            for (sum, each) in kind_income.iter_mut().zip(model.kinds) {
+                *sum += each;
+            }
+            any_income += model.any;
+            for (sum, each) in choice_income.iter_mut().zip(model.choice) {
+                *sum += each;
+            }
             total += all * frame.left;
             // A copy that ran into the next round stops before its collect
             // step; the powers readied there are not this round's.
@@ -869,12 +985,27 @@ impl Eval {
         let flexible = (0.7 * essence_income + 0.5 * hand.len() as f64).max(2.0);
 
         let mut goals: Vec<Goal> = Vec::new();
-        let mut consider = |model: &Model, off: u32, from_hand: bool| {
+        let mut etas: Vec<(EntityId, f64)> = Vec::new();
+        let mut consider = |model: &Model, off: u32, from_hand: bool, shared: Option<EntityId>| {
             let Some(price) = &model.price else {
                 return;
             };
             let missing = Self::missing(price, &pool, off, off_no_gold);
-            let rounds = f64::from(missing) / flexible;
+            // A price made mostly of one kind (9 Death) is reached by the
+            // income of that kind, not by any essence: a collect of the
+            // other kinds only helps through swaps.
+            let heavy = (0..5)
+                .filter(|i| *i != 4 && price.specific[*i] >= 6)
+                .max_by_key(|i| price.specific[*i]);
+            let rate = heavy.map_or(flexible, |k| {
+                let own = kind_income[k] + choice_income[k] + any_income;
+                let others = (essence_income - own).max(0.0);
+                (0.5 * hand.len() as f64 + own + p.other_kind * others).max(2.0)
+            });
+            let rounds = f64::from(missing) / rate;
+            if let Some(id) = shared {
+                etas.push((id, rounds));
+            }
             if rounds >= frame.left + 0.5 {
                 return;
             }
@@ -906,6 +1037,8 @@ impl Eval {
                     price: price.clone(),
                     off,
                     off_no_gold,
+                    shared,
+                    rounds,
                 });
             }
         };
@@ -918,15 +1051,50 @@ impl Eval {
                         } else {
                             0
                         };
-                    consider(model, off, true);
+                    consider(model, off, true, None);
                 }
             }
         }
         for kind in [MONUMENT_ROW, PLACES] {
             for &id in Self::zone(state, &Owner::Shared, kind) {
                 if let Some(model) = self.model_of_entity(state, id) {
-                    consider(model, 0, false);
+                    consider(model, 0, false, Some(id));
                 }
+            }
+        }
+        Parts {
+            total,
+            goals,
+            pool,
+            flexible,
+            etas,
+        }
+    }
+
+    /// Adds the cards worth getting. `rivals` holds, for every rival, the
+    /// rounds it needs to afford each shared card: a card a rival affords
+    /// sooner is worth less to this player, who would be too late.
+    fn finish(&self, parts: Parts, _frame: &Frame, rivals: &[&[(EntityId, f64)]]) -> f64 {
+        let p = &self.params;
+        let Parts {
+            mut total,
+            mut goals,
+            pool,
+            flexible,
+            ..
+        } = parts;
+        for goal in &mut goals {
+            let Some(id) = goal.shared else {
+                continue;
+            };
+            let sooner = rivals
+                .iter()
+                .filter_map(|etas| etas.iter().find(|(e, _)| *e == id))
+                .map(|(_, r)| *r)
+                .fold(f64::INFINITY, f64::min);
+            if sooner < goal.rounds {
+                let lag = goal.rounds - sooner;
+                goal.profit *= (1.0 - p.race_lag * lag).clamp(p.race_floor, 1.0);
             }
         }
         // The best goals first; each one keeps the essences it needs away
@@ -1001,8 +1169,7 @@ impl Eval {
     fn can_end(&self, state: &GameState, player: PlayerId) -> bool {
         Self::zone(state, &Owner::Player(player), TABLEAU).iter().any(|&id| {
             state.entity(id).is_ok_and(|e| {
-                !e.exhausted
-                    && self.model(e.def).is_some_and(|m| m.powers.iter().any(|p| p.ends))
+                !e.exhausted && self.model(e.def).is_some_and(|m| m.powers.iter().any(|p| p.ends))
             })
         })
     }
@@ -1035,15 +1202,23 @@ impl Eval {
                 -WIN
             };
         }
-        let mine = self.player(state, me, frame, detail);
-        let rivals: Vec<f64> = state
-            .flow
-            .turn_order
-            .order()
-            .iter()
-            .filter(|q| **q != me)
-            .map(|q| self.player(state, *q, frame, false))
-            .collect();
+        let order = state.flow.turn_order.order();
+        let all: Vec<(PlayerId, Parts)> =
+            order.iter().map(|q| (*q, self.parts(state, *q, frame, *q == me && detail))).collect();
+        let etas: Vec<(PlayerId, Vec<(EntityId, f64)>)> =
+            all.iter().map(|(q, parts)| (*q, parts.etas.clone())).collect();
+        let mut mine = 0.0;
+        let mut rivals: Vec<f64> = Vec::new();
+        for (q, parts) in all {
+            let others: Vec<&[(EntityId, f64)]> =
+                etas.iter().filter(|(o, _)| *o != q).map(|(_, e)| e.as_slice()).collect();
+            let value = self.finish(parts, frame, &others);
+            if q == me {
+                mine = value;
+            } else {
+                rivals.push(value);
+            }
+        }
         if rivals.is_empty() {
             return mine;
         }
@@ -1247,7 +1422,7 @@ impl PlannerBot {
                     |m| {
                         let income = self.eval.income(m, None, &frame, 1.0, false, &[]).0;
                         if from != DRAFT {
-                            return income;
+                            return income + self.place_pull(state, m);
                         }
                         // An artifact in the draft is worth what it makes over
                         // the game, plus its points, less what it costs to
@@ -1269,6 +1444,23 @@ impl PlannerBot {
             }
         }
         best.1
+    }
+
+    /// A mage that collects the essence a place of power on the table is made
+    /// of (Death for the Catacombs) gets a player there rounds sooner, which
+    /// a plain income does not show.
+    fn place_pull(&self, state: &GameState, mage: &Model) -> f64 {
+        let mut pull = 0.0;
+        for &id in Eval::zone(state, &Owner::Shared, PLACES) {
+            let Some(price) = self.eval.model_of_entity(state, id).and_then(|m| m.price.as_ref())
+            else {
+                continue;
+            };
+            for k in (0..5).filter(|k| *k != 4 && price.specific[*k] >= 6) {
+                pull += mage.kinds[k] + mage.choice[k] + mage.any;
+            }
+        }
+        pull * self.eval.params.place_pull
     }
 
     /// In the collect step: a collect ability that only gives something (no
@@ -1429,11 +1621,7 @@ impl Bot for PlannerBot {
             match (best_move, pass) {
                 // A pass that wins beats everything that does not.
                 (Some((gain, _)), Some(at)) if pass_gain.is_some_and(wins) && !wins(gain) => at,
-                (Some((gain, i)), _)
-                    if gain > floor && self.actions < ACTIONS_PER_ROUND =>
-                {
-                    i
-                },
+                (Some((gain, i)), _) if gain > floor && self.actions < ACTIONS_PER_ROUND => i,
                 (_, Some(at)) => at,
                 (Some((_, i)), None) => i,
                 (None, None) => 0,

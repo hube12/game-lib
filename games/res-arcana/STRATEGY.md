@@ -202,3 +202,37 @@ Changes:
 - Draft pick: an artifact is now valued as `income x rounds left x draft_time + points x point worth x draft_vp +
   Dragon bonus - price x draft_cost` (0.5 each), instead of income alone. In 1300 paired draft games this is level with
   the old rule (about 50%), so it is a sanity fix, not a measured gain.
+
+## 11. Findings from the Catacombs game (2026-11-22, seed 100000, human won 10-4 in round 4)
+
+The human drafted Witch (collect Life/Death) and Death / Life, so it started the first action phase with 3 Death against
+the bot's 1 (Duelist, Calm / Elan). Both then discarded one card per turn for 2 Death, the bot reaching 7 when the human
+reached 9 and claimed Catacombs of the Dead in round 1. The Catacombs then made about 2.5 VP a round (10 Death on the
+card = 10 VP). The bot sat on 7 Death it could not spend, passed with 20 idle essences in rounds 2-4 and scored 4.
+
+The race was lost in the draft, not in round 1. What the bot lacked was any idea of it:
+
+- A place of power is one card, but each player counted it as his own goal, so a rival 2 Death ahead did not lower the
+  bot's estimate of its own chances (and the bot's lead did not show up as a loss for the rival).
+- A price of 9 Death was reached "by any essence income", so a collect of Death and a collect of Elan looked the same,
+  and the draft never preferred a Death mage for a table with the Catacombs.
+
+Changes (all three are off at `race_lag=0 place_pull=0 other_kind=1`):
+
+- `race_lag` (0.5), `race_floor` (0.2): for every place and monument the rounds each player needs to afford it are
+  compared; the player who is behind counts its profit 0.5 less per round of lag (at least 20% stays). `position` now
+  scores all players first and settles the races afterwards (`Eval::parts` and `Eval::finish`). Effect: a bot that is
+  behind stops sinking its hand into Death (in the logged game it takes other essences at the discard choices) and a
+  bot that is ahead gets the full value and the rival's loss, so it hurries to claim first.
+- `other_kind` (0.35): a price with 6 or more of one essence (9 Death, 8 Life, 6 Elan) is reached by the income of that
+  kind (fixed, "A / B" choice, or free choice), plus half a card per card in hand (discard for 2), plus this share of
+  every other kind. A Witch or Death / Life now halves the rounds to the Catacombs.
+- `place_pull` (3.0): in the mage choice, a mage's income gets this many units per essence it collects of a kind a
+  place on the table is made of. In the logged game the bot's choice (Duelist) is unchanged, because Healer and Duelist
+  cannot collect Death; with a Necromancer or Witch in the pair it will take it when the Catacombs are on the table.
+
+Measured: 400 paired self-play games against the same bot with the three switched off, 197-204 (noise). The change is
+about contested play, which self-play seldom produces, so it is not expected to move that number.
+
+Not solved: the bot still cannot stop a player who is simply ahead in the draft. The remaining weakness is idle essences
+after a lost race (section 9.7) and converting them into points faster than 2.5 VP a round.

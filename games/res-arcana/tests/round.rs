@@ -466,6 +466,9 @@ fn magic_items_are_picked_counterclockwise_starting_right_of_the_first_player() 
         let mut expected = order.clone();
         expected.reverse();
         picks.truncate(expected.len());
-        assert_eq!(picks, expected, "seed {seed}: the last in turn order picks first");
+        assert_eq!(
+            picks, expected,
+            "seed {seed}: the last in turn order picks first"
+        );
     }
 }

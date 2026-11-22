@@ -18,8 +18,9 @@
 //! is by convention).
 //!
 //! Tests marked `#[ignore = "bug: ..."]` assert the printed behavior of a card
-//! that the engine gets wrong today: Divination with a short deck and the two "2 essences + 1 Life on the card" powers
-//! (Chalice of Life, Fountain of Youth).
+//! that the engine gets wrong today: Divination with a short deck and the two
+//! "2 essences + 1 Life on the card" powers (Chalice of Life, Fountain of
+//! Youth).
 //!
 //! Not covered: the back sides of the places of power and the magic items'
 //! "passed" side (not in the game), and the three or four player turn order
@@ -1053,7 +1054,10 @@ fn seer_shuffles_the_discard_pile_under_a_short_deck_before_looking() {
     let seer = card(&e, P0, "Seherin");
     use_power(&mut e, P0, seer, 0);
     peek(&mut e, DECK, &[0, 1, 2]);
-    assert!(names(&e, P0, DISCARD).is_empty(), "the discard pile went into the deck");
+    assert!(
+        names(&e, P0, DISCARD).is_empty(),
+        "the discard pile went into the deck"
+    );
     let deck = top_names(&e, &Owner::Player(P0), DECK, 4);
     assert_eq!(deck.len(), 4);
     assert_eq!(deck[0], "Nachtigall", "the card that was left stays on top");
